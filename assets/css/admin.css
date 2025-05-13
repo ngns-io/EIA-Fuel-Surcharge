@@ -1,0 +1,124 @@
+/**
+ * Admin CSS for EIA Fuel Surcharge Display
+ */
+
+/* Settings Page */
+.eia-fuel-surcharge-admin-container {
+    display: flex;
+    flex-wrap: wrap;
+    margin-top: 20px;
+}
+
+.eia-fuel-surcharge-main {
+    flex: 1;
+    min-width: 500px;
+    margin-right: 20px;
+}
+
+.eia-fuel-surcharge-sidebar {
+    width: 300px;
+}
+
+.eia-fuel-surcharge-box {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+    margin-bottom: 20px;
+    padding: 15px;
+}
+
+.eia-fuel-surcharge-box h3 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+/* Form Styles */
+.form-table th {
+    width: 200px;
+}
+
+/* Data Table */
+.eia-fuel-surcharge-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.eia-fuel-surcharge-data-table th,
+.eia-fuel-surcharge-data-table td {
+    padding: 8px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+.eia-fuel-surcharge-data-table th {
+    background-color: #f8f8f8;
+    font-weight: 600;
+}
+
+.eia-fuel-surcharge-data-table tr:hover {
+    background-color: #f5f5f5;
+}
+
+/* Logs Table */
+.eia-fuel-surcharge-logs-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.eia-fuel-surcharge-logs-table th,
+.eia-fuel-surcharge-logs-table td {
+    padding: 8px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+.eia-fuel-surcharge-logs-table th {
+    background-color: #f8f8f8;
+    font-weight: 600;
+}
+
+.eia-fuel-surcharge-logs-table tr:hover {
+    background-color: #f5f5f5;
+}
+
+.log-type-api_error,
+.log-type-update_error,
+.log-type-db_error {
+    color: #d63638;
+}
+
+.log-type-api_success,
+.log-type-update_success {
+    color: #00a32a;
+}
+
+/* Dashboard Widget */
+.eia-fuel-surcharge-dashboard-widget {
+    padding: 12px;
+}
+
+.eia-fuel-surcharge-dashboard-widget p {
+    margin: 0 0 12px;
+}
+
+.eia-fuel-surcharge-dashboard-widget .current-rate {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 16px;
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 782px) {
+    .eia-fuel-surcharge-main {
+        margin-right: 0;
+        min-width: 100%;
+    }
+    
+    .eia-fuel-surcharge-sidebar {
+        width: 100%;
+        margin-top: 20px;
+    }
+}

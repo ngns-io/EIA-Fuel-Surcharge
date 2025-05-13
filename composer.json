@@ -1,0 +1,21 @@
+{
+    "name": "your-vendor/eia-fuel-surcharge",
+    "description": "A WordPress plugin that retrieves diesel fuel prices from the U.S. Energy Information Administration (EIA) API and calculates fuel surcharge rates.",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0+",
+    "authors": [
+        {
+            "name": "Doug Evenhouse",
+            "email": "doug@evenhouseconsulting.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "php": ">=7.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "EIAFuelSurcharge\\": "includes/"
+        }
+    }
+}
