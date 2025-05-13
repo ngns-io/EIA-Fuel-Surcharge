@@ -50,6 +50,24 @@ class EIAHandler {
     private $cache_duration = 3600; // 1 hour by default
 
     /**
+     * Cache key prefix.
+     *
+     * @since    2.0.0
+     * @access   private
+     * @var      string    $cache_prefix    Cache key prefix.
+     */
+    private $cache_prefix = 'eia_fuel_surcharge_';
+
+    /**
+     * Maximum retry attempts for API calls.
+     *
+     * @since    2.0.0
+     * @access   private
+     * @var      int    $max_retries    Maximum retry attempts.
+     */
+    private $max_retries = 3;
+
+    /**
      * Initialize the class and set its properties.
      *
      * @since    1.0.0
@@ -63,6 +81,76 @@ class EIAHandler {
         if (isset($options['cache_duration'])) {
             $this->cache_duration = intval($options['cache_duration']) * 60; // Convert minutes to seconds
         }
+        
+        // Set max retries from settings if available
+        if (isset($options['max_retries'])) {
+            $this->max_retries = intval($options['max_retries']);
+        }
+    }
+
+    /**
+     * Get cache key for a specific endpoint and parameters.
+     *
+     * @since    2.0.0
+     * @param    string    $endpoint    The API endpoint.
+     * @param    array     $params      The query parameters.
+     * @return   string    The cache key.
+     */
+    private function get_cache_key($endpoint, $params) {
+        // Remove the API key from params for security
+        if (isset($params['api_key'])) {
+            unset($params['api_key']);
+        }
+        
+        // Sort params to ensure consistent cache keys
+        ksort($params);
+        
+        // Create a hash of the endpoint and parameters
+        $param_string = json_encode($params);
+        $hash = md5($endpoint . $param_string);
+        
+        // Return prefixed cache key
+        return $this->cache_prefix . $hash;
+    }
+
+    /**
+     * Get cached API response if available.
+     *
+     * @since    2.0.0
+     * @param    string    $endpoint    The API endpoint.
+     * @param    array     $params      The query parameters.
+     * @return   mixed     The cached data or false if not cached.
+     */
+    private function get_cached_data($endpoint, $params) {
+        $cache_key = $this->get_cache_key($endpoint, $params);
+        return get_transient($cache_key);
+    }
+
+    /**
+     * Cache API response data.
+     *
+     * @since    2.0.0
+     * @param    string    $endpoint    The API endpoint.
+     * @param    array     $params      The query parameters.
+     * @param    mixed     $data        The data to cache.
+     * @return   bool      True on success, false on failure.
+     */
+    private function cache_data($endpoint, $params, $data) {
+        $cache_key = $this->get_cache_key($endpoint, $params);
+        return set_transient($cache_key, $data, $this->cache_duration);
+    }
+
+    /**
+     * Clear cached API response for a specific endpoint and parameters.
+     *
+     * @since    2.0.0
+     * @param    string    $endpoint    The API endpoint.
+     * @param    array     $params      The query parameters.
+     * @return   bool      True on success, false on failure.
+     */
+    private function clear_cached_data($endpoint, $params) {
+        $cache_key = $this->get_cache_key($endpoint, $params);
+        return delete_transient($cache_key);
     }
 
     /**
@@ -78,17 +166,7 @@ class EIAHandler {
             return new \WP_Error('missing_api_key', __('EIA API key is missing. Please enter it in the plugin settings.', 'eia-fuel-surcharge'));
         }
 
-        // Check cache first if not forcing refresh
-        if (!$force_refresh) {
-            $cached_data = get_transient('eia_fuel_surcharge_api_data');
-            if ($cached_data !== false) {
-                $this->logger->log('cache_hit', __('Using cached API data', 'eia-fuel-surcharge'));
-                return $cached_data;
-            }
-        }
-
         // Build the API endpoint URL for on-highway diesel prices
-        // Using the petroleum/pri/gnd endpoint for on-highway diesel prices
         $endpoint = 'petroleum/pri/gnd/data/';
         
         // Set query parameters
@@ -102,6 +180,15 @@ class EIAHandler {
             'offset'              => 0,
             'length'              => 5 // Get the 5 most recent records
         ];
+
+        // Check cache first if not forcing refresh
+        if (!$force_refresh) {
+            $cached_data = $this->get_cached_data($endpoint, $params);
+            if ($cached_data !== false) {
+                $this->logger->log('cache_hit', __('Using cached API data', 'eia-fuel-surcharge'));
+                return $cached_data;
+            }
+        }
         
         // Build the request URL
         $request_url = add_query_arg($params, $this->api_base_url . $endpoint);
@@ -118,7 +205,7 @@ class EIAHandler {
         }
         
         // Cache the successful response
-        set_transient('eia_fuel_surcharge_api_data', $response, $this->cache_duration);
+        $this->cache_data($endpoint, $params, $response);
         
         // Return the data
         return $response;
@@ -133,7 +220,7 @@ class EIAHandler {
      */
     private function make_api_request($request_url) {
         // Make the API request with retry logic
-        $max_retries = 3;
+        $max_retries = $this->max_retries;
         $retry_count = 0;
         
         while ($retry_count < $max_retries) {
@@ -459,9 +546,9 @@ class EIAHandler {
     }
 
     /**
-     * Test the API connection.
+     * Test the API connection with detailed feedback.
      *
-     * @since    1.0.0
+     * @since    2.0.0
      * @param    string   $api_key    Optional. The API key to test.
      * @return   array|WP_Error    Array with status and message on success, WP_Error on failure.
      */
@@ -471,7 +558,10 @@ class EIAHandler {
         
         // Check if API key is set
         if (empty($test_api_key)) {
-            return new \WP_Error('missing_api_key', __('API key is required for testing.', 'eia-fuel-surcharge'));
+            return new \WP_Error(
+                'missing_api_key', 
+                __('API key is required for testing.', 'eia-fuel-surcharge')
+            );
         }
         
         // Build a minimal request to test the API
@@ -486,6 +576,12 @@ class EIAHandler {
         
         $request_url = add_query_arg($params, $this->api_base_url . $endpoint);
         
+        // Log the test attempt
+        $this->logger->log('api_test', 'Testing API connection');
+        
+        // Start timing the request
+        $start_time = microtime(true);
+        
         // Make the API request
         $response = wp_remote_get($request_url, [
             'timeout'     => 10,
@@ -495,27 +591,44 @@ class EIAHandler {
             ]
         ]);
         
+        // Calculate response time
+        $response_time = round((microtime(true) - $start_time) * 1000); // in milliseconds
+        
         // Check for errors
         if (is_wp_error($response)) {
+            $this->logger->log_api_error(
+                'API connection test failed: ' . $response->get_error_message(),
+                ['response_time' => $response_time . 'ms']
+            );
             return $response;
         }
         
         // Check response code
         $response_code = wp_remote_retrieve_response_code($response);
-        if ($response_code !== 200) {
-            $body = wp_remote_retrieve_body($response);
-            $data = json_decode($body, true);
-            
-            if (isset($data['error']['message'])) {
-                return new \WP_Error('api_error', $data['error']['message']);
-            } else {
-                return new \WP_Error('api_error', 'Error response code: ' . $response_code);
-            }
-        }
-        
-        // Parse the successful response to get API version and other details
         $body = wp_remote_retrieve_body($response);
         $data = json_decode($body, true);
+        
+        if ($response_code !== 200) {
+            $error_message = isset($data['error']['message']) 
+                ? $data['error']['message'] 
+                : 'Error response code: ' . $response_code;
+                
+            $this->logger->log_api_error(
+                'API connection test failed: ' . $error_message,
+                [
+                    'response_code' => $response_code,
+                    'response_time' => $response_time . 'ms'
+                ]
+            );
+            
+            return new \WP_Error('api_error', $error_message);
+        }
+        
+        // Log success
+        $this->logger->log_api_success([
+            'response_time' => $response_time . 'ms',
+            'response_code' => $response_code
+        ]);
         
         // Return detailed success information
         return [
@@ -523,7 +636,9 @@ class EIAHandler {
             'message' => __('API connection successful', 'eia-fuel-surcharge'),
             'api_version' => isset($data['apiVersion']) ? $data['apiVersion'] : __('Unknown', 'eia-fuel-surcharge'),
             'data_available' => !empty($data['response']['data']),
-            'response_time' => wp_remote_retrieve_header($response, 'x-response-time'),
+            'response_time' => $response_time . 'ms',
+            'response_code' => $response_code,
+            'sample_data' => !empty($data['response']['data']) ? array_slice($data['response']['data'], 0, 1) : [],
         ];
     }
 
@@ -534,7 +649,36 @@ class EIAHandler {
      * @return   boolean   True on success, false on failure.
      */
     public function clear_cache() {
-        return delete_transient('eia_fuel_surcharge_api_data');
+        return $this->clear_all_cache();
+    }
+
+    /**
+     * Clear all cached API data.
+     *
+     * @since    2.0.0
+     * @return   bool    Always returns true.
+     */
+    public function clear_all_cache() {
+        global $wpdb;
+        
+        // Get all transients that match our prefix
+        $prefix = '_transient_' . $this->cache_prefix;
+        $sql = $wpdb->prepare(
+            "SELECT option_name FROM $wpdb->options WHERE option_name LIKE %s",
+            $wpdb->esc_like($prefix) . '%'
+        );
+        
+        $transients = $wpdb->get_col($sql);
+        
+        // Delete each matching transient
+        foreach ($transients as $transient) {
+            $transient_name = str_replace('_transient_', '', $transient);
+            delete_transient($transient_name);
+        }
+        
+        $this->logger->log('cache_clear', __('All API cache cleared', 'eia-fuel-surcharge'));
+        
+        return true;
     }
 
     /**
@@ -544,43 +688,28 @@ class EIAHandler {
      * @return   array   The API status information.
      */
     public function get_api_status() {
+        global $wpdb;
+        
+        // Count the number of cached items
+        $prefix = '_transient_' . $this->cache_prefix;
+        $sql = $wpdb->prepare(
+            "SELECT COUNT(*) FROM $wpdb->options WHERE option_name LIKE %s",
+            $wpdb->esc_like($prefix) . '%'
+        );
+        
+        $cache_count = (int)$wpdb->get_var($sql);
+        
         $status = [
             'has_api_key' => !empty($this->api_key),
             'cache_enabled' => true,
             'cache_duration' => $this->cache_duration,
-            'cache_expiry' => null,
+            'cache_count' => $cache_count,
+            'max_retries' => $this->max_retries,
             'last_updated' => null,
             'last_error' => null,
         ];
         
-        // Check if data is cached
-        $cached_data = get_transient('eia_fuel_surcharge_api_data');
-        if ($cached_data !== false) {
-            $status['cache_exists'] = true;
-            
-            // Get cache expiration time
-            $transients_option = get_option('_transient_timeout_eia_fuel_surcharge_api_data');
-            if ($transients_option) {
-                $status['cache_expiry'] = date_i18n(
-                    get_option('date_format') . ' ' . get_option('time_format'),
-                    $transients_option
-                );
-                
-                // Calculate time until expiry
-                $now = time();
-                $seconds_to_expiry = $transients_option - $now;
-                if ($seconds_to_expiry > 0) {
-                    $status['cache_time_remaining'] = $this->format_time_remaining($seconds_to_expiry);
-                } else {
-                    $status['cache_time_remaining'] = __('Expired', 'eia-fuel-surcharge');
-                }
-            }
-        } else {
-            $status['cache_exists'] = false;
-        }
-        
         // Get latest log entries
-        global $wpdb;
         $log_table = $wpdb->prefix . 'fuel_surcharge_logs';
         
         // Get last successful update
@@ -612,6 +741,25 @@ class EIAHandler {
                     strtotime($last_error->created_at)
                 )
             ];
+        }
+        
+        // Test API connection
+        if ($status['has_api_key']) {
+            // Use cached test result if available to avoid too many API calls
+            $test_cache_key = $this->cache_prefix . 'api_test_result';
+            $cached_test = get_transient($test_cache_key);
+            
+            if ($cached_test === false) {
+                $test_result = $this->test_api_connection();
+                
+                // Cache the test result for 1 hour
+                set_transient($test_cache_key, $test_result, HOUR_IN_SECONDS);
+                
+                $status['api_test'] = $test_result;
+            } else {
+                $status['api_test'] = $cached_test;
+                $status['api_test']['from_cache'] = true;
+            }
         }
         
         return $status;
@@ -660,5 +808,411 @@ class EIAHandler {
         }
         
         return sprintf(_n('%d day', '%d days', $days, 'eia-fuel-surcharge'), $days);
+    }
+
+/**
+     * Check if the API key is valid.
+     *
+     * @since    2.0.0
+     * @return   bool    True if the API key is valid, false otherwise.
+     */
+    public function is_api_key_valid() {
+        if (empty($this->api_key)) {
+            return false;
+        }
+        
+        // Check cache first
+        $cache_key = $this->cache_prefix . 'api_key_valid';
+        $cached_result = get_transient($cache_key);
+        
+        if ($cached_result !== false) {
+            return (bool) $cached_result;
+        }
+        
+        // Test the API connection
+        $test_result = $this->test_api_connection();
+        $is_valid = !is_wp_error($test_result) && isset($test_result['success']) && $test_result['success'] === true;
+        
+        // Cache the result for 1 day
+        set_transient($cache_key, $is_valid, DAY_IN_SECONDS);
+        
+        return $is_valid;
+    }
+
+    /**
+     * Get the API usage statistics.
+     *
+     * @since    2.0.0
+     * @param    int       $days    Number of days to look back.
+     * @return   array     API usage statistics.
+     */
+    public function get_api_usage_stats($days = 30) {
+        global $wpdb;
+        
+        $log_table = $wpdb->prefix . 'fuel_surcharge_logs';
+        $stats = [];
+        
+        // Get start date
+        $start_date = date('Y-m-d', strtotime("-{$days} days"));
+        
+        // Get total requests
+        $total_requests = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM $log_table 
+            WHERE log_type = 'api_request' 
+            AND created_at >= %s",
+            $start_date . ' 00:00:00'
+        ));
+        
+        $stats['total_requests'] = (int) $total_requests;
+        
+        // Get successful requests
+        $successful_requests = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM $log_table 
+            WHERE log_type = 'api_success' 
+            AND created_at >= %s",
+            $start_date . ' 00:00:00'
+        ));
+        
+        $stats['successful_requests'] = (int) $successful_requests;
+        
+        // Get error requests
+        $error_requests = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM $log_table 
+            WHERE log_type = 'api_error' 
+            AND created_at >= %s",
+            $start_date . ' 00:00:00'
+        ));
+        
+        $stats['error_requests'] = (int) $error_requests;
+        
+        // Get cache hits
+        $cache_hits = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM $log_table 
+            WHERE log_type = 'cache_hit' 
+            AND created_at >= %s",
+            $start_date . ' 00:00:00'
+        ));
+        
+        $stats['cache_hits'] = (int) $cache_hits;
+        
+        // Calculate success rate
+        $stats['success_rate'] = $stats['total_requests'] > 0 
+            ? round(($stats['successful_requests'] / $stats['total_requests']) * 100, 2) 
+            : 0;
+            
+        // Calculate cache hit rate
+        $total_lookups = $stats['total_requests'] + $stats['cache_hits'];
+        $stats['cache_hit_rate'] = $total_lookups > 0 
+            ? round(($stats['cache_hits'] / $total_lookups) * 100, 2) 
+            : 0;
+        
+        // Get requests by day
+        $requests_by_day = $wpdb->get_results($wpdb->prepare(
+            "SELECT DATE(created_at) as date, COUNT(*) as count 
+            FROM $log_table 
+            WHERE log_type = 'api_request' 
+            AND created_at >= %s 
+            GROUP BY DATE(created_at) 
+            ORDER BY date ASC",
+            $start_date . ' 00:00:00'
+        ), ARRAY_A);
+        
+        // Create a complete date range
+        $stats['requests_by_day'] = [];
+        $current_date = new \DateTime($start_date);
+        $end_date = new \DateTime();
+        
+        while ($current_date <= $end_date) {
+            $date_string = $current_date->format('Y-m-d');
+            $stats['requests_by_day'][$date_string] = 0;
+            $current_date->modify('+1 day');
+        }
+        
+        // Fill in actual request counts
+        foreach ($requests_by_day as $row) {
+            $stats['requests_by_day'][$row['date']] = (int) $row['count'];
+        }
+        
+        return $stats;
+    }
+
+    /**
+     * Get regional diesel prices.
+     *
+     * @since    2.0.0
+     * @param    bool      $force_refresh    Whether to force a refresh from the API.
+     * @return   array|WP_Error    The regional diesel price data or WP_Error on failure.
+     */
+    public function get_regional_diesel_prices($force_refresh = false) {
+        // Check if API key is set
+        if (empty($this->api_key)) {
+            return new \WP_Error('missing_api_key', __('EIA API key is missing. Please enter it in the plugin settings.', 'eia-fuel-surcharge'));
+        }
+
+        // Build the API endpoint URL for on-highway diesel prices by region
+        $endpoint = 'petroleum/pri/gnd/data/';
+        
+        // Set query parameters for regional data
+        $params = [
+            'api_key'             => $this->api_key,
+            'data[]'              => 'value',
+            'frequency'           => 'weekly',
+            'sort[0][column]'     => 'period',
+            'sort[0][direction]'  => 'desc',
+            'offset'              => 0,
+            'length'              => 10 // Get the 10 most recent records for each region
+        ];
+        
+        // Define regions to fetch
+        $regions = [
+            'DHUSR' => 'national',  // US
+            'DHR10' => 'east_coast', // East Coast
+            'DHR1Z' => 'new_england', // New England
+            'DHR1Y' => 'central_atlantic', // Central Atlantic
+            'DHR1X' => 'lower_atlantic', // Lower Atlantic
+            'DHR20' => 'midwest', // Midwest
+            'DHR30' => 'gulf_coast', // Gulf Coast
+            'DHR40' => 'rocky_mountain', // Rocky Mountain
+            'DHR50' => 'west_coast', // West Coast
+            'DHR5CA' => 'california' // California
+        ];
+        
+        $all_data = [];
+        
+        foreach ($regions as $region_code => $region_name) {
+            // Set region-specific parameter
+            $region_params = $params;
+            $region_params['facets[duoarea][]'] = $region_code;
+            
+            // Check cache first if not forcing refresh
+            if (!$force_refresh) {
+                $cached_data = $this->get_cached_data($endpoint, $region_params);
+                if ($cached_data !== false) {
+                    $all_data[$region_name] = $cached_data;
+                    continue;
+                }
+            }
+            
+            // Build the request URL
+            $request_url = add_query_arg($region_params, $this->api_base_url . $endpoint);
+            
+            // Log the request (for debugging)
+            $this->logger->log_api_request($request_url);
+            
+            // Make the API request with enhanced error handling
+            $response = $this->make_api_request($request_url);
+            
+            // If there was an error, log it but continue with other regions
+            if (is_wp_error($response)) {
+                $this->logger->log_api_error(sprintf(
+                    __('Error fetching data for region %s: %s', 'eia-fuel-surcharge'),
+                    $region_name,
+                    $response->get_error_message()
+                ));
+                continue;
+            }
+            
+            // Cache the successful response
+            $this->cache_data($endpoint, $region_params, $response);
+            
+            // Add to the combined data
+            $all_data[$region_name] = $response;
+        }
+        
+        // Check if we got any data
+        if (empty($all_data)) {
+            return new \WP_Error('no_data', __('No data was retrieved for any region', 'eia-fuel-surcharge'));
+        }
+        
+        return $all_data;
+    }
+
+    /**
+     * Process and store regional diesel price data.
+     *
+     * @since    2.0.0
+     * @param    array     $regional_data    The regional diesel price data.
+     * @return   array     Result of the operation.
+     */
+    public function process_and_store_regional_data($regional_data) {
+        // Get calculator instance
+        $calculator = new Calculator();
+        
+        // Combined stats for all regions
+        $total_stats = [
+            'inserted' => 0,
+            'updated' => 0,
+            'skipped' => 0,
+            'errors' => 0
+        ];
+        
+        foreach ($regional_data as $region_name => $api_data) {
+            // Process the API response for this region
+            $processed_data = [];
+            
+            // Check if the response has the expected structure
+            if (!isset($api_data['response']['data']) || !is_array($api_data['response']['data'])) {
+                $this->logger->log('data_processing_error', sprintf(
+                    __('API response for region %s does not have the expected structure', 'eia-fuel-surcharge'),
+                    $region_name
+                ));
+                continue;
+            }
+            
+            // Process each price entry
+            foreach ($api_data['response']['data'] as $entry) {
+                // Check for required fields
+                if (!isset($entry['period']) || !isset($entry['value'])) {
+                    $this->logger->log('data_processing_warning', __('Skipping entry due to missing required fields', 'eia-fuel-surcharge'));
+                    continue;
+                }
+                
+                // Check for valid date format (should be YYYY-MM-DD)
+                if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $entry['period'])) {
+                    $this->logger->log('data_processing_warning', sprintf(
+                        __('Skipping entry with invalid date format: %s', 'eia-fuel-surcharge'),
+                        $entry['period']
+                    ));
+                    continue;
+                }
+                
+                // Validate value is numeric
+                if (!is_numeric($entry['value'])) {
+                    $this->logger->log('data_processing_warning', sprintf(
+                        __('Skipping entry with non-numeric price value: %s', 'eia-fuel-surcharge'),
+                        $entry['value']
+                    ));
+                    continue;
+                }
+                
+                // Convert date from YYYY-MM-DD format to a timestamp
+                $date = strtotime($entry['period']);
+                
+                // Add the processed data
+                $processed_data[] = [
+                    'date'          => date('Y-m-d', $date),
+                    'diesel_price'  => floatval($entry['value']),
+                    'region'        => $region_name,
+                ];
+            }
+            
+            if (empty($processed_data)) {
+                $this->logger->log('data_processing_warning', sprintf(
+                    __('No valid data entries found in API response for region %s', 'eia-fuel-surcharge'),
+                    $region_name
+                ));
+                continue;
+            }
+            
+            // Save the processed data for this region
+            $save_result = $this->save_diesel_price_data($processed_data);
+            
+            if (isset($save_result['stats'])) {
+                $total_stats['inserted'] += $save_result['stats']['inserted'];
+                $total_stats['updated'] += $save_result['stats']['updated'];
+                $total_stats['skipped'] += $save_result['stats']['skipped'];
+                $total_stats['errors'] += $save_result['stats']['errors'];
+            }
+        }
+        
+        // Log overall results
+        $this->logger->log('regional_data_update', sprintf(
+            __('Regional data update completed: %d inserted, %d updated, %d skipped, %d errors', 'eia-fuel-surcharge'),
+            $total_stats['inserted'],
+            $total_stats['updated'],
+            $total_stats['skipped'],
+            $total_stats['errors']
+        ));
+        
+        return [
+            'success' => ($total_stats['errors'] === 0),
+            'stats' => $total_stats
+        ];
+    }
+
+    /**
+     * Get the latest data for all regions.
+     *
+     * @since    2.0.0
+     * @return   array    Latest diesel price data by region.
+     */
+    public function get_latest_data_by_region() {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'fuel_surcharge_data';
+        
+        // Get the latest date for which we have data
+        $latest_date = $wpdb->get_var("SELECT MAX(price_date) FROM $table_name");
+        
+        if (!$latest_date) {
+            return [];
+        }
+        
+        // Get data for all regions for this date
+        $results = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT * FROM $table_name WHERE price_date = %s ORDER BY region ASC",
+                $latest_date
+            ),
+            ARRAY_A
+        );
+        
+        // Index by region
+        $by_region = [];
+        foreach ($results as $row) {
+            $by_region[$row['region']] = $row;
+        }
+        
+        return $by_region;
+    }
+
+    /**
+     * Get historical data for a specific region.
+     *
+     * @since    2.0.0
+     * @param    string    $region       The region to get data for.
+     * @param    int       $limit        Maximum number of records to return.
+     * @param    string    $start_date   Optional start date (YYYY-MM-DD).
+     * @param    string    $end_date     Optional end date (YYYY-MM-DD).
+     * @return   array     The historical data.
+     */
+    public function get_historical_data($region = 'national', $limit = 52, $start_date = null, $end_date = null) {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'fuel_surcharge_data';
+        
+        // Build the query
+        $query = "SELECT * FROM $table_name WHERE region = %s";
+        $query_args = [$region];
+        
+        // Add date range if provided
+        if ($start_date) {
+            $query .= " AND price_date >= %s";
+            $query_args[] = $start_date;
+        }
+        
+        if ($end_date) {
+            $query .= " AND price_date <= %s";
+            $query_args[] = $end_date;
+        }
+        
+        // Add order and limit
+        $query .= " ORDER BY price_date DESC";
+        
+        if ($limit > 0) {
+            $query .= " LIMIT %d";
+            $query_args[] = $limit;
+        }
+        
+        // Prepare and execute the query
+        $query = $wpdb->prepare($query, $query_args);
+        $results = $wpdb->get_results($query, ARRAY_A);
+        
+        // Sort by date (oldest first) for easier charting
+        usort($results, function($a, $b) {
+            return strtotime($a['price_date']) - strtotime($b['price_date']);
+        });
+        
+        return $results;
     }
 }
