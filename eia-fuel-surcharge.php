@@ -3,23 +3,23 @@
  * EIA Fuel Surcharge Display
  *
  * @package           EIAFuelSurcharge
- * @author            Your Name
- * @copyright         2025 Your Name or Company
+ * @author            Doug Evenhouse
+ * @copyright         2025 Evenhouse Consulting, Inc.
  * @license           GPL-2.0-or-later
  *
  * @wordpress-plugin
  * Plugin Name:       EIA Fuel Surcharge Display
- * Plugin URI:        https://example.com/plugin-name
+ * Plugin URI:        https://ngns.io/plugins/eia-fuel-surcharge
  * Description:       A WordPress plugin that retrieves diesel fuel prices from the U.S. Energy Information Administration (EIA) API and calculates fuel surcharge rates for display on your website through flexible shortcodes.
  * Version:           1.0.0
  * Requires at least: 5.2
  * Requires PHP:      7.2
- * Author:            Your Name
- * Author URI:        https://example.com
+ * Author:            Doug Evenhouse
+ * Author URI:        https://ngns.io
  * Text Domain:       eia-fuel-surcharge
  * License:           GPL v2 or later
  * License URI:       http://www.gnu.org/licenses/gpl-2.0.txt
- * Update URI:        https://example.com/eia-fuel-surcharge/
+ * Update URI:        https://ngns.io/plugins/eia-fuel-surcharge/
  */
 
 // If this file is called directly, abort.

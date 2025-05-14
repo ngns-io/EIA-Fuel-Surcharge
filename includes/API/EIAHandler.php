@@ -282,40 +282,37 @@ class EIAHandler {
             // Handle different HTTP error codes
             $body = wp_remote_retrieve_body($response);
             
-            // Switch based on error code ranges
-            switch (true) {
-                case $response_code >= 400 && $response_code < 500:
-                    // Client errors
-                    $error_message = $this->parse_error_message($body, $response_code);
-                    $this->logger->log_api_error("Client error ({$response_code}): {$error_message}");
-                    
-                    // Don't retry client errors as they're likely to be the same
-                    return new \WP_Error('api_client_error', $error_message, ['status' => $response_code]);
-                    
-                case $response_code >= 500:
-                    // Server errors - these are retriable
-                    $error_message = $this->parse_error_message($body, $response_code);
-                    $this->logger->log_api_error(sprintf(
-                        __('Server error %d (attempt %d of %d): %s', 'eia-fuel-surcharge'),
-                        $response_code,
-                        $retry_count + 1,
-                        $max_retries,
-                        $error_message
-                    ));
-                    
-                    // Retry after a short delay
-                    $retry_count++;
-                    if ($retry_count < $max_retries) {
-                        sleep(3); // Wait 3 seconds before retrying
-                        continue;
-                    }
-                    
-                    return new \WP_Error('api_server_error', $error_message, ['status' => $response_code]);
-                    
-                default:
-                    // Unexpected response code
-                    $this->logger->log_api_error("Unexpected response code: {$response_code}");
-                    return new \WP_Error('api_unexpected_response', "Unexpected response code: {$response_code}");
+            // Check error code ranges using if-else instead of switch
+            if ($response_code >= 400 && $response_code < 500) {
+                // Client errors
+                $error_message = $this->parse_error_message($body, $response_code);
+                $this->logger->log_api_error("Client error ({$response_code}): {$error_message}");
+                
+                // Don't retry client errors as they're likely to be the same
+                return new \WP_Error('api_client_error', $error_message, ['status' => $response_code]);
+            } elseif ($response_code >= 500) {
+                // Server errors - these are retriable
+                $error_message = $this->parse_error_message($body, $response_code);
+                $this->logger->log_api_error(sprintf(
+                    __('Server error %d (attempt %d of %d): %s', 'eia-fuel-surcharge'),
+                    $response_code,
+                    $retry_count + 1,
+                    $max_retries,
+                    $error_message
+                ));
+                
+                // Retry after a short delay
+                $retry_count++;
+                if ($retry_count < $max_retries) {
+                    sleep(3); // Wait 3 seconds before retrying
+                    continue;
+                }
+                
+                return new \WP_Error('api_server_error', $error_message, ['status' => $response_code]);
+            } else {
+                // Unexpected response code
+                $this->logger->log_api_error("Unexpected response code: {$response_code}");
+                return new \WP_Error('api_unexpected_response', "Unexpected response code: {$response_code}");
             }
         }
         

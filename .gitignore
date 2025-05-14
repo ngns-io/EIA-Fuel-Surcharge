@@ -1,0 +1,77 @@
+# Operating System files
+.DS_Store
+Thumbs.db
+desktop.ini
+.Spotlight-V100
+.Trashes
+
+# Editor and IDE files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.nova/
+.phpintel/
+*.code-workspace
+*.swp
+*.swo
+*~
+
+# Composer
+/vendor/
+composer.lock
+
+# Node.js
+/node_modules/
+npm-debug.log
+yarn-error.log
+yarn-debug.log
+package-lock.json
+
+# PHP
+*.log
+*.cache
+
+# WordPress plugin specific
+/dist/
+/build/
+*.zip
+
+# Testing-related files
+/phpunit.xml
+/.phpunit.result.cache
+/tests/coverage/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Documentation files that might be in the working directory but not needed in the plugin
+/docs/private/
+/design-assets/
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+*.diff
+*.err
+*.orig
+*.rej
+*.sav
+*.log
+/tmp/
+
+# Log files
+*.log
+/logs/
+
+# Development scripts and tools
+/tools/
+/scripts/
+/.github/
+
+# Mac specific
+.AppleDouble
+.LSOverride
