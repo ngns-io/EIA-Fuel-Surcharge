@@ -1,6 +1,6 @@
 <?php
 /**
- * Handles logging for the plugin.
+ * Handles fuel surcharge calculations.
  *
  * @package    EIAFuelSurcharge
  * @subpackage EIAFuelSurcharge\Utilities
@@ -8,215 +8,170 @@
 
 namespace EIAFuelSurcharge\Utilities;
 
-class Logger {
+class Calculator {
 
     /**
-     * Log an API request for debugging purposes.
+     * Base threshold price.
      *
      * @since    1.0.0
-     * @param    string    $request_url    The API request URL.
+     * @access   private
+     * @var      float    $base_threshold    The base threshold price.
      */
-    public function log_api_request($request_url) {
-        global $wpdb;
+    private $base_threshold;
+
+    /**
+     * Increment amount.
+     *
+     * @since    1.0.0
+     * @access   private
+     * @var      float    $increment_amount    The increment amount.
+     */
+    private $increment_amount;
+
+    /**
+     * Percentage rate per increment.
+     *
+     * @since    1.0.0
+     * @access   private
+     * @var      float    $percentage_rate    The percentage rate per increment.
+     */
+    private $percentage_rate;
+
+    /**
+     * Initialize the class and set its properties.
+     *
+     * @since    1.0.0
+     */
+    public function __construct() {
+        $options = get_option('eia_fuel_surcharge_settings');
         
-        // Remove API key from URL for security
-        $sanitized_url = preg_replace('/api_key=[^&]*/', 'api_key=REDACTED', $request_url);
+        // Set defaults if options are not set
+        $this->base_threshold = isset($options['base_threshold']) ? floatval($options['base_threshold']) : 1.20;
+        $this->increment_amount = isset($options['increment_amount']) ? floatval($options['increment_amount']) : 0.06;
+        $this->percentage_rate = isset($options['percentage_rate']) ? floatval($options['percentage_rate']) : 0.5;
+    }
+
+    /**
+     * Calculate surcharge rate based on diesel price.
+     *
+     * Formula: Surcharge = ((Diesel Price - Base Threshold) / Increment Amount) * Percentage Rate
+     *
+     * @since    1.0.0
+     * @param    float    $diesel_price    The diesel price.
+     * @return   float    The calculated surcharge rate.
+     */
+    public function calculate_surcharge_rate($diesel_price) {
+        // If diesel price is below threshold, no surcharge
+        if ($diesel_price <= $this->base_threshold) {
+            return 0.0;
+        }
         
-        $table_name = $wpdb->prefix . 'fuel_surcharge_logs';
-        $wpdb->insert(
-            $table_name,
-            [
-                'log_type'   => 'api_request',
-                'message'    => 'API Request: ' . $sanitized_url,
-                'created_at' => current_time('mysql')
-            ],
-            ['%s', '%s', '%s']
+        // Calculate the price difference above threshold
+        $price_difference = $diesel_price - $this->base_threshold;
+        
+        // Calculate the number of increments
+        $increments = $price_difference / $this->increment_amount;
+        
+        // Calculate the surcharge rate
+        $surcharge_rate = $increments * $this->percentage_rate;
+        
+        // Return the calculated surcharge rate
+        return $surcharge_rate;
+    }
+
+    /**
+     * Get the current formula parameters.
+     *
+     * @since    1.0.0
+     * @return   array    The formula parameters.
+     */
+    public function get_formula_parameters() {
+        return [
+            'base_threshold' => $this->base_threshold,
+            'increment_amount' => $this->increment_amount,
+            'percentage_rate' => $this->percentage_rate
+        ];
+    }
+
+    /**
+     * Get a human-readable description of the formula.
+     *
+     * @since    1.0.0
+     * @return   string    The formula description.
+     */
+    public function get_formula_description() {
+        return sprintf(
+            __('Base Price Threshold: $%1$s | For every $%2$s increase above threshold, add %3$s%% to surcharge', 'eia-fuel-surcharge'),
+            number_format($this->base_threshold, 2),
+            number_format($this->increment_amount, 2),
+            number_format($this->percentage_rate, 1)
         );
     }
 
     /**
-     * Log an API error.
+     * Calculate surcharge rates for a range of diesel prices.
      *
-     * @since    1.0.0
-     * @param    string    $error_message    The error message.
+     * @since    2.0.0
+     * @param    float    $min_price    The minimum diesel price.
+     * @param    float    $max_price    The maximum diesel price.
+     * @param    float    $step         The price step.
+     * @return   array    The calculated surcharge rates.
      */
-    public function log_api_error($error_message) {
-        global $wpdb;
+    public function calculate_surcharge_rate_range($min_price, $max_price, $step = 0.05) {
+        $results = [];
         
-        $table_name = $wpdb->prefix . 'fuel_surcharge_logs';
-        $wpdb->insert(
-            $table_name,
-            [
-                'log_type'   => 'api_error',
-                'message'    => 'API Error: ' . $error_message,
-                'created_at' => current_time('mysql')
-            ],
-            ['%s', '%s', '%s']
-        );
+        for ($price = $min_price; $price <= $max_price; $price += $step) {
+            $results[] = [
+                'price' => round($price, 3),
+                'rate' => $this->calculate_surcharge_rate($price)
+            ];
+        }
+        
+        return $results;
     }
 
     /**
-     * Log an API success.
+     * Validate surcharge parameters.
      *
-     * @since    1.0.0
+     * @since    2.0.0
+     * @param    array    $params    The parameters to validate.
+     * @return   array    Validation results with errors if any.
      */
-    public function log_api_success() {
-        global $wpdb;
+    public function validate_parameters($params) {
+        $errors = [];
         
-        $table_name = $wpdb->prefix . 'fuel_surcharge_logs';
-        $wpdb->insert(
-            $table_name,
-            [
-                'log_type'   => 'api_success',
-                'message'    => 'API Request Successful',
-                'created_at' => current_time('mysql')
-            ],
-            ['%s', '%s', '%s']
-        );
+        // Validate base_threshold
+        if (!isset($params['base_threshold']) || !is_numeric($params['base_threshold']) || $params['base_threshold'] < 0) {
+            $errors['base_threshold'] = __('Base threshold must be a non-negative number', 'eia-fuel-surcharge');
+        }
+        
+        // Validate increment_amount
+        if (!isset($params['increment_amount']) || !is_numeric($params['increment_amount']) || $params['increment_amount'] <= 0) {
+            $errors['increment_amount'] = __('Increment amount must be a positive number', 'eia-fuel-surcharge');
+        }
+        
+        // Validate percentage_rate
+        if (!isset($params['percentage_rate']) || !is_numeric($params['percentage_rate']) || $params['percentage_rate'] < 0) {
+            $errors['percentage_rate'] = __('Percentage rate must be a non-negative number', 'eia-fuel-surcharge');
+        }
+        
+        return [
+            'valid' => empty($errors),
+            'errors' => $errors
+        ];
     }
 
     /**
-     * Log a database error.
+     * Apply custom formula via filter if available.
      *
-     * @since    1.0.0
-     * @param    string    $error_message    The error message.
+     * @since    2.0.0
+     * @param    float    $diesel_price    The diesel price.
+     * @return   float    The calculated surcharge rate.
      */
-    public function log_db_error($error_message) {
-        global $wpdb;
+    public function apply_custom_formula($diesel_price) {
+        $calculated_rate = $this->calculate_surcharge_rate($diesel_price);
         
-        $table_name = $wpdb->prefix . 'fuel_surcharge_logs';
-        $wpdb->insert(
-            $table_name,
-            [
-                'log_type'   => 'db_error',
-                'message'    => 'Database Error: ' . $error_message,
-                'created_at' => current_time('mysql')
-            ],
-            ['%s', '%s', '%s']
-        );
-    }
-
-    /**
-     * Log a scheduled event.
-     *
-     * @since    1.0.0
-     * @param    int       $next_run     The timestamp for the next run.
-     * @param    string    $recurrence   The recurrence.
-     */
-    public function log_scheduled_event($next_run, $recurrence) {
-        global $wpdb;
-        
-        $table_name = $wpdb->prefix . 'fuel_surcharge_logs';
-        $wpdb->insert(
-            $table_name,
-            [
-                'log_type'   => 'schedule',
-                'message'    => sprintf(
-                    __('Scheduled update: %s (%s)', 'eia-fuel-surcharge'),
-                    date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $next_run),
-                    $recurrence
-                ),
-                'created_at' => current_time('mysql')
-            ],
-            ['%s', '%s', '%s']
-        );
-    }
-
-    /**
-     * Log update start.
-     *
-     * @since    1.0.0
-     */
-    public function log_update_start() {
-        global $wpdb;
-        
-        $table_name = $wpdb->prefix . 'fuel_surcharge_logs';
-        $wpdb->insert(
-            $table_name,
-            [
-                'log_type'   => 'update_start',
-                'message'    => __('Starting scheduled update', 'eia-fuel-surcharge'),
-                'created_at' => current_time('mysql')
-            ],
-            ['%s', '%s', '%s']
-        );
-    }
-
-    /**
-     * Log update success.
-     *
-     * @since    1.0.0
-     */
-    public function log_update_success() {
-        global $wpdb;
-        
-        $table_name = $wpdb->prefix . 'fuel_surcharge_logs';
-        $wpdb->insert(
-            $table_name,
-            [
-                'log_type'   => 'update_success',
-                'message'    => __('Scheduled update completed successfully', 'eia-fuel-surcharge'),
-                'created_at' => current_time('mysql')
-            ],
-            ['%s', '%s', '%s']
-        );
-    }
-
-    /**
-     * Log update error.
-     *
-     * @since    1.0.0
-     * @param    string    $error_message    The error message.
-     */
-    public function log_update_error($error_message) {
-        global $wpdb;
-        
-        $table_name = $wpdb->prefix . 'fuel_surcharge_logs';
-        $wpdb->insert(
-            $table_name,
-            [
-                'log_type'   => 'update_error',
-                'message'    => __('Update error: ', 'eia-fuel-surcharge') . $error_message,
-                'created_at' => current_time('mysql')
-            ],
-            ['%s', '%s', '%s']
-        );
-    }
-
-    /**
-     * Get logs.
-     *
-     * @since    1.0.0
-     * @param    int     $limit     The number of logs to retrieve.
-     * @param    int     $offset    The offset.
-     * @return   array   The logs.
-     */
-    public function get_logs($limit = 50, $offset = 0) {
-        global $wpdb;
-        
-        $table_name = $wpdb->prefix . 'fuel_surcharge_logs';
-        
-        return $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT * FROM $table_name ORDER BY created_at DESC LIMIT %d OFFSET %d",
-                $limit,
-                $offset
-            ),
-            ARRAY_A
-        );
-    }
-
-    /**
-     * Count logs.
-     *
-     * @since    1.0.0
-     * @return   int   The number of logs.
-     */
-    public function count_logs() {
-        global $wpdb;
-        
-        $table_name = $wpdb->prefix . 'fuel_surcharge_logs';
-        
-        return (int) $wpdb->get_var("SELECT COUNT(*) FROM $table_name");
+        // Apply filter to allow custom calculation logic
+        return apply_filters('eia_fuel_surcharge_rate', $calculated_rate, $diesel_price);
     }
 }
