@@ -118,11 +118,14 @@
             }
         });
 
-        // Manual update button handler with proper error handling
+        // Manual update button handler with proper error handling and detailed debug info
         $('#manual-update-button').on('click', function() {
             var $button = $(this);
             var $status = $('#manual-update-status');
             var originalText = $button.text();
+            
+            // Clear previous results
+            $('#manual-update-results').empty();
             
             // Disable the button and show loading state
             $button.prop('disabled', true).text(eia_fuel_surcharge_params.i18n.updating || 'Updating...');
@@ -134,15 +137,21 @@
                 type: 'POST',
                 data: {
                     action: 'eia_fuel_surcharge_manual_update_ajax',
-                    nonce: eia_fuel_surcharge_params.i18n.manual_update_nonce || eia_fuel_surcharge_params.nonce
+                    nonce: eia_fuel_surcharge_params.manual_update_nonce // Use the correct nonce
                 },
                 success: function(response) {
                     // Check if response is valid
                     if (response && typeof response === 'object') {
+                        // Add detailed results like the API test
+                        var $resultsContainer = $('#manual-update-results');
+                        
                         if (response.success) {
                             // Success case
-                            $status.text(response.data.message || 'Update successful!')
-                                .css('color', 'green');
+                            $status.text(response.data.message || 'Update successful!').css('color', 'green');
+                            
+                            $resultsContainer.html('<div class="notice notice-success inline">' +
+                                '<p><strong>' + (response.data.message || 'Update successful!') + '</strong></p>' +
+                                '</div>');
                         } else {
                             // Error case
                             var errorMessage = 'Update failed.';
@@ -154,15 +163,44 @@
                             }
                             
                             $status.text(errorMessage).css('color', 'red');
+                            
+                            // Create detailed error display
+                            var html = '<div class="notice notice-error inline">' +
+                                '<p><strong>Update failed</strong></p>' +
+                                '<p>' + errorMessage + '</p>' +
+                                '</div>';
+                            
+                            // Add debug info if available
+                            if (response.data && response.data.debug) {
+                                html += '<div class="eia-api-debug-info">' +
+                                    '<p><a href="#" class="eia-toggle-debug-info">Show/Hide Debug Information</a></p>' +
+                                    '<div class="eia-debug-info-content" style="display:none;">' +
+                                    '<pre>' + JSON.stringify(response.data.debug, null, 2) + '</pre>' +
+                                    '</div></div>';
+                            }
+                            
+                            $resultsContainer.html(html);
+                            
+                            // Add toggle functionality for debug info
+                            $resultsContainer.find('.eia-toggle-debug-info').on('click', function(e) {
+                                e.preventDefault();
+                                $(this).closest('.eia-api-debug-info').find('.eia-debug-info-content').slideToggle();
+                            });
                         }
                     } else {
                         // Invalid response
                         $status.text('Received invalid response from server').css('color', 'red');
+                        $('#manual-update-results').html('<div class="notice notice-error inline">' +
+                            '<p>Received invalid response from server</p>' +
+                            '</div>');
                     }
                 },
                 error: function(xhr, status, error) {
                     // Handle AJAX errors
                     $status.text('Update failed: ' + error).css('color', 'red');
+                    $('#manual-update-results').html('<div class="notice notice-error inline">' +
+                        '<p>AJAX Error: ' + error + '</p>' +
+                        '</div>');
                 },
                 complete: function() {
                     // Re-enable the button and restore original text

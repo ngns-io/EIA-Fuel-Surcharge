@@ -66,9 +66,13 @@ if (!defined('WPINC')) {
                         <button type="button" id="manual-update-button" class="button"><?php _e('Update Now', 'eia-fuel-surcharge'); ?></button>
                         <span class="description"><?php _e('Manually trigger an update from the EIA API.', 'eia-fuel-surcharge'); ?></span>
                         <span id="manual-update-status" style="display:none; margin-left: 10px;"></span>
+                        
+                        <!-- Add results container similar to API test -->
+                        <div id="manual-update-results" class="eia-api-test-results" style="margin-top: 15px;"></div>
                     </td>
                 </tr>
             </table>
+            
         </div>
 
         <!-- Display Settings Tab -->

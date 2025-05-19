@@ -306,10 +306,16 @@ class Admin {
      * @since    1.0.0
      */
     public function ajax_manual_update() {
-        // Check nonce
-        if (!check_ajax_referer('eia_fuel_surcharge_manual_update_ajax', 'nonce', false)) {
+        // Check nonce with detailed error reporting
+        $nonce_check = check_ajax_referer('eia_fuel_surcharge_manual_update_ajax', 'nonce', false);
+        
+        if (!$nonce_check) {
             wp_send_json_error([
-                'message' => __('Security check failed', 'eia-fuel-surcharge')
+                'message' => __('Security check failed', 'eia-fuel-surcharge'),
+                'debug' => [
+                    'received' => isset($_POST['nonce']) ? 'Yes' : 'No',
+                    'expected' => 'eia_fuel_surcharge_manual_update_ajax'
+                ]
             ]);
             return;
         }
@@ -340,7 +346,8 @@ class Admin {
             }
             
             wp_send_json_error([
-                'message' => $error_message
+                'message' => $error_message,
+                'debug' => $result
             ]);
         }
     }
