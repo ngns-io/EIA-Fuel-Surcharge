@@ -9,21 +9,32 @@
      * When the DOM is ready
      */
     $(function() {
-        // API Key testing
+        // API Key testing with visual feedback
         $('#test-api-key').on('click', function(e) {
             e.preventDefault();
             var apiKey = $('#api_key').val();
             var $button = $(this);
-            var originalText = $button.text();
+            var $buttonText = $button.find('.button-text');
+            var $spinner = $button.find('.spinner');
+            var $resultsContainer = $('#api-test-results');
+            var originalText = $buttonText.text();
 
             // Check if API key is provided
             if (!apiKey) {
-                alert(eia_fuel_surcharge_params.i18n.enter_api_key);
+                $resultsContainer.html('<div class="notice notice-error inline"><p>' + eia_fuel_surcharge_params.i18n.enter_api_key + '</p></div>');
                 return;
             }
 
-            // Disable button and show loading state
-            $button.prop('disabled', true).text(eia_fuel_surcharge_params.i18n.testing);
+            // Clear previous results
+            $resultsContainer.empty();
+            
+            // Show loading state
+            $button.prop('disabled', true);
+            $buttonText.text(eia_fuel_surcharge_params.i18n.testing);
+            $spinner.addClass('is-active');
+            
+            // Add initial loading message to the results container
+            $resultsContainer.html('<div class="eia-loading-message"><p>' + eia_fuel_surcharge_params.i18n.testing + '...</p></div>');
 
             // Send AJAX request
             $.ajax({
@@ -35,18 +46,32 @@
                     api_key: apiKey
                 },
                 success: function(response) {
+                    // Clear the loading message
+                    $resultsContainer.empty();
+                    
                     if (response.success) {
-                        alert(eia_fuel_surcharge_params.i18n.api_test_success);
+                        // Success case
+                        $resultsContainer.html(response.data.html || '<div class="notice notice-success inline"><p>API connection successful!</p></div>');
                     } else {
-                        alert(eia_fuel_surcharge_params.i18n.api_test_error + ': ' + response.data.message);
+                        // Error case
+                        $resultsContainer.html(response.data.html || '<div class="notice notice-error inline"><p>' + (response.data.message || 'Error testing API connection') + '</p></div>');
                     }
+                    
+                    // Add toggle functionality for debug info
+                    $resultsContainer.find('.eia-toggle-debug-info').on('click', function(e) {
+                        e.preventDefault();
+                        $(this).closest('.eia-api-debug-info').find('.eia-debug-info-content').slideToggle();
+                    });
                 },
-                error: function() {
-                    alert(eia_fuel_surcharge_params.i18n.ajax_error);
+                error: function(xhr, status, error) {
+                    // Handle AJAX errors
+                    $resultsContainer.html('<div class="notice notice-error inline"><p>' + eia_fuel_surcharge_params.i18n.ajax_error + ': ' + error + '</p></div>');
                 },
                 complete: function() {
-                    // Re-enable button and restore original text
-                    $button.prop('disabled', false).text(originalText);
+                    // Reset button state
+                    $button.prop('disabled', false);
+                    $buttonText.text(originalText);
+                    $spinner.removeClass('is-active');
                 }
             });
         });
@@ -91,6 +116,64 @@
             if (!confirm(eia_fuel_surcharge_params.i18n.confirm_clear_logs)) {
                 e.preventDefault();
             }
+        });
+
+        // Manual update button handler with proper error handling
+        $('#manual-update-button').on('click', function() {
+            var $button = $(this);
+            var $status = $('#manual-update-status');
+            var originalText = $button.text();
+            
+            // Disable the button and show loading state
+            $button.prop('disabled', true).text(eia_fuel_surcharge_params.i18n.updating || 'Updating...');
+            $status.text('').show();
+            
+            // Send AJAX request
+            $.ajax({
+                url: ajaxurl, // WordPress AJAX URL
+                type: 'POST',
+                data: {
+                    action: 'eia_fuel_surcharge_manual_update_ajax',
+                    nonce: eia_fuel_surcharge_params.i18n.manual_update_nonce || eia_fuel_surcharge_params.nonce
+                },
+                success: function(response) {
+                    // Check if response is valid
+                    if (response && typeof response === 'object') {
+                        if (response.success) {
+                            // Success case
+                            $status.text(response.data.message || 'Update successful!')
+                                .css('color', 'green');
+                        } else {
+                            // Error case
+                            var errorMessage = 'Update failed.';
+                            
+                            if (response.data && typeof response.data === 'object' && response.data.message) {
+                                errorMessage = response.data.message;
+                            } else if (response.data && typeof response.data === 'string') {
+                                errorMessage = response.data;
+                            }
+                            
+                            $status.text(errorMessage).css('color', 'red');
+                        }
+                    } else {
+                        // Invalid response
+                        $status.text('Received invalid response from server').css('color', 'red');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    // Handle AJAX errors
+                    $status.text('Update failed: ' + error).css('color', 'red');
+                },
+                complete: function() {
+                    // Re-enable the button and restore original text
+                    $button.prop('disabled', false).text(originalText);
+                    
+                    // Hide status after 5 seconds
+                    setTimeout(function() {
+                        $status.fadeOut();
+                    }, 5000);
+                }
+            });
         });
 
         // Tabs functionality for settings page

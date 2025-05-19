@@ -547,7 +547,7 @@ class EIAHandler {
      *
      * @since    2.0.0
      * @param    string   $api_key    Optional. The API key to test.
-     * @return   array|WP_Error    Array with status and message on success, WP_Error on failure.
+     * @return   array    Array with detailed test results including request/response data.
      */
     public function test_api_connection($api_key = null) {
         // Use the provided API key or fallback to the stored one
@@ -555,10 +555,11 @@ class EIAHandler {
         
         // Check if API key is set
         if (empty($test_api_key)) {
-            return new \WP_Error(
-                'missing_api_key', 
-                __('API key is required for testing.', 'eia-fuel-surcharge')
-            );
+            return [
+                'success' => false,
+                'message' => __('API key is required for testing.', 'eia-fuel-surcharge'),
+                'debug_info' => null
+            ];
         }
         
         // Build a minimal request to test the API
@@ -573,15 +574,22 @@ class EIAHandler {
         
         $request_url = add_query_arg($params, $this->api_base_url . $endpoint);
         
-        // Log the test attempt
-        $this->logger->log('api_test', 'Testing API connection');
+        // Log the test attempt but sanitize the API key in the logged URL
+        $logged_url = preg_replace('/api_key=[^&]*/', 'api_key=REDACTED', $request_url);
+        $this->logger->log('api_test', 'Testing API connection to: ' . $logged_url);
         
         // Start timing the request
         $start_time = microtime(true);
         
+        // Store debug information
+        $debug_info = [
+            'request_url' => $logged_url,
+            'request_time' => date('Y-m-d H:i:s'),
+        ];
+        
         // Make the API request
         $response = wp_remote_get($request_url, [
-            'timeout'     => 10,
+            'timeout'     => 15,
             'user-agent'  => 'EIA Fuel Surcharge WordPress Plugin/' . EIA_FUEL_SURCHARGE_VERSION,
             'headers'     => [
                 'Accept' => 'application/json',
@@ -590,26 +598,45 @@ class EIAHandler {
         
         // Calculate response time
         $response_time = round((microtime(true) - $start_time) * 1000); // in milliseconds
+        $debug_info['response_time'] = $response_time . 'ms';
         
         // Check for errors
         if (is_wp_error($response)) {
+            $error_message = $response->get_error_message();
             $this->logger->log_api_error(
-                'API connection test failed: ' . $response->get_error_message(),
+                'API connection test failed: ' . $error_message,
                 ['response_time' => $response_time . 'ms']
             );
-            return $response;
+            
+            $debug_info['error'] = $error_message;
+            $debug_info['error_code'] = $response->get_error_code();
+            
+            return [
+                'success' => false,
+                'message' => $error_message,
+                'debug_info' => $debug_info
+            ];
         }
         
-        // Check response code
+        // Get response code and body
         $response_code = wp_remote_retrieve_response_code($response);
         $body = wp_remote_retrieve_body($response);
+        
+        // Add response info to debug data
+        $debug_info['response_code'] = $response_code;
+        $debug_info['response_body_sample'] = substr($body, 0, 500) . (strlen($body) > 500 ? '...' : '');
+        $debug_info['response_headers'] = wp_remote_retrieve_headers($response);
+        
+        // Try to parse the response body
         $data = json_decode($body, true);
+        $json_error = json_last_error();
+        $debug_info['json_parse_error'] = $json_error !== JSON_ERROR_NONE ? json_last_error_msg() : null;
         
         if ($response_code !== 200) {
             $error_message = isset($data['error']['message']) 
                 ? $data['error']['message'] 
                 : 'Error response code: ' . $response_code;
-                
+                    
             $this->logger->log_api_error(
                 'API connection test failed: ' . $error_message,
                 [
@@ -618,7 +645,32 @@ class EIAHandler {
                 ]
             );
             
-            return new \WP_Error('api_error', $error_message);
+            $debug_info['parsed_error'] = $error_message;
+            
+            return [
+                'success' => false,
+                'message' => $error_message,
+                'debug_info' => $debug_info
+            ];
+        }
+        
+        // Check if we got the expected data structure
+        if ($json_error !== JSON_ERROR_NONE || !isset($data['response']) || !isset($data['response']['data'])) {
+            $error_message = __('Invalid JSON response or unexpected data structure', 'eia-fuel-surcharge');
+            
+            $this->logger->log_api_error(
+                'API connection test failed: ' . $error_message,
+                [
+                    'response_code' => $response_code,
+                    'response_time' => $response_time . 'ms'
+                ]
+            );
+            
+            return [
+                'success' => false,
+                'message' => $error_message,
+                'debug_info' => $debug_info
+            ];
         }
         
         // Log success
@@ -627,15 +679,23 @@ class EIAHandler {
             'response_code' => $response_code
         ]);
         
+        // Extract API version from response if available
+        $api_version = isset($data['apiVersion']) ? $data['apiVersion'] : __('Unknown', 'eia-fuel-surcharge');
+        
+        // Add any data information to debug info
+        if (!empty($data['response']['data'])) {
+            $debug_info['data_sample'] = array_slice($data['response']['data'], 0, 1);
+        }
+        
         // Return detailed success information
         return [
             'success' => true,
             'message' => __('API connection successful', 'eia-fuel-surcharge'),
-            'api_version' => isset($data['apiVersion']) ? $data['apiVersion'] : __('Unknown', 'eia-fuel-surcharge'),
+            'api_version' => $api_version,
             'data_available' => !empty($data['response']['data']),
             'response_time' => $response_time . 'ms',
             'response_code' => $response_code,
-            'sample_data' => !empty($data['response']['data']) ? array_slice($data['response']['data'], 0, 1) : [],
+            'debug_info' => $debug_info
         ];
     }
 

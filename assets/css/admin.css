@@ -110,6 +110,58 @@
     margin-bottom: 16px;
 }
 
+/* API Testing styles */
+.eia-api-key-container {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.eia-api-key-container input {
+    margin-right: 8px;
+}
+
+.eia-api-key-container .spinner {
+    visibility: hidden;
+    vertical-align: middle;
+}
+
+.eia-api-key-container .spinner.is-active {
+    visibility: visible;
+}
+
+.eia-api-test-results {
+    margin-top: 15px;
+    padding: 5px 0;
+}
+
+.eia-loading-message {
+    padding: 10px;
+    background-color: #f8f8f8;
+    border-left: 4px solid #646970;
+}
+
+.eia-api-debug-info {
+    margin-top: 15px;
+    border-top: 1px solid #ddd;
+    padding-top: 10px;
+}
+
+.eia-debug-info-content {
+    margin-top: 10px;
+}
+
+.eia-debug-info-content pre {
+    font-family: monospace;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    background: #f6f7f7;
+    padding: 10px;
+    border: 1px solid #ddd;
+    max-height: 300px;
+    overflow: auto;
+}
+
 /* Responsive adjustments */
 @media screen and (max-width: 782px) {
     .eia-fuel-surcharge-main {

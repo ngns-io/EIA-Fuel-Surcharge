@@ -344,15 +344,27 @@ class Settings {
     }
     
     // Field callbacks - these render the actual form fields
+    /**
+     * API Key field callback - with enhanced visual feedback
+     */
     public function api_key_field_callback() {
         $options = get_option('eia_fuel_surcharge_settings');
         $api_key = isset($options['api_key']) ? $options['api_key'] : '';
         
+        echo '<div class="eia-api-key-container">';
         echo '<input type="text" id="api_key" name="eia_fuel_surcharge_settings[api_key]" value="' . esc_attr($api_key) . '" class="regular-text" />';
-        echo '<button type="button" id="test-api-key" class="button button-secondary">' . __('Test API Key', 'eia-fuel-surcharge') . '</button>';
-        echo '<p class="description">' . __('Enter your EIA API key.', 'eia-fuel-surcharge') . '</p>';
+        echo '<button type="button" id="test-api-key" class="button button-secondary">';
+        echo '<span class="button-text">' . __('Test API Key', 'eia-fuel-surcharge') . '</span>';
+        echo '<span class="spinner" style="float:none; margin-left:4px; margin-right:0;"></span>';
+        echo '</button>';
+        echo '</div>';
+        
+        echo '<p class="description">' . __('Enter your EIA API key. If you don\'t have an API key, you can get one for free at <a href="https://www.eia.gov/opendata/" target="_blank">EIA Open Data</a>.', 'eia-fuel-surcharge') . '</p>';
+        
+        // Add container for API test results with clear styling
+        echo '<div id="api-test-results" class="eia-api-test-results" style="margin-top: 15px;"></div>';
     }
-    
+
     public function region_field_callback() {
         $options = get_option('eia_fuel_surcharge_settings');
         $region = isset($options['region']) ? $options['region'] : 'national';

@@ -47,7 +47,6 @@ class Admin {
         add_action('wp_ajax_eia_fuel_surcharge_manual_update_ajax', [$this, 'ajax_manual_update']);
         
         // Set up admin post handlers
-        add_action('admin_post_eia_fuel_surcharge_manual_update', [$this, 'handle_manual_update']);
         add_action('admin_post_eia_fuel_surcharge_clear_data', [$this, 'handle_clear_data']);
         add_action('admin_post_eia_fuel_surcharge_clear_logs', [$this, 'handle_clear_logs']);
         add_action('admin_post_eia_fuel_surcharge_export_data', [$this, 'handle_export_data']);
@@ -74,6 +73,7 @@ class Admin {
         wp_localize_script($this->plugin_name, 'eia_fuel_surcharge_params', [
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce'    => wp_create_nonce('eia_fuel_surcharge_nonce'),
+            'manual_update_nonce' => wp_create_nonce('eia_fuel_surcharge_manual_update_ajax'),
             'i18n'     => [
                 'enter_api_key'        => __('Please enter an API key to test.', 'eia-fuel-surcharge'),
                 'testing'              => __('Testing...', 'eia-fuel-surcharge'),
@@ -202,53 +202,146 @@ class Admin {
     public function ajax_test_api() {
         // Check nonce
         if (!check_ajax_referer('eia_fuel_surcharge_nonce', 'nonce', false)) {
-            wp_send_json_error(['message' => __('Security check failed', 'eia-fuel-surcharge')]);
+            wp_send_json_error([
+                'message' => __('Security check failed', 'eia-fuel-surcharge'),
+                'html' => '<div class="notice notice-error inline"><p>' . __('Security check failed', 'eia-fuel-surcharge') . '</p></div>'
+            ]);
         }
         
         // Check for API key
         $api_key = isset($_POST['api_key']) ? sanitize_text_field($_POST['api_key']) : '';
         
         if (empty($api_key)) {
-            wp_send_json_error(['message' => __('API key is required', 'eia-fuel-surcharge')]);
+            wp_send_json_error([
+                'message' => __('API key is required', 'eia-fuel-surcharge'),
+                'html' => '<div class="notice notice-error inline"><p>' . __('API key is required', 'eia-fuel-surcharge') . '</p></div>'
+            ]);
         }
         
         // Test the API connection
         $api_handler = new \EIAFuelSurcharge\API\EIAHandler();
         $test_result = $api_handler->test_api_connection($api_key);
         
-        if (is_wp_error($test_result)) {
-            wp_send_json_error(['message' => $test_result->get_error_message()]);
+        // Generate HTML for the response
+        $html = '';
+        
+        if ($test_result['success']) {
+            $html .= '<div class="notice notice-success inline">';
+            $html .= '<p><strong>' . __('API connection successful!', 'eia-fuel-surcharge') . '</strong></p>';
+            $html .= '<ul>';
+            $html .= '<li>' . __('API Version:', 'eia-fuel-surcharge') . ' ' . esc_html($test_result['api_version']) . '</li>';
+            $html .= '<li>' . __('Response Time:', 'eia-fuel-surcharge') . ' ' . esc_html($test_result['response_time']) . '</li>';
+            $html .= '<li>' . __('Response Code:', 'eia-fuel-surcharge') . ' ' . esc_html($test_result['response_code']) . '</li>';
+            $html .= '<li>' . __('Data Available:', 'eia-fuel-surcharge') . ' ' . ($test_result['data_available'] ? __('Yes', 'eia-fuel-surcharge') : __('No', 'eia-fuel-surcharge')) . '</li>';
+            $html .= '</ul>';
+            $html .= '</div>';
         } else {
-            wp_send_json_success(['message' => __('API connection successful', 'eia-fuel-surcharge')]);
+            $html .= '<div class="notice notice-error inline">';
+            $html .= '<p><strong>' . __('API connection failed', 'eia-fuel-surcharge') . '</strong></p>';
+            $html .= '<p>' . esc_html($test_result['message']) . '</p>';
+            $html .= '</div>';
+        }
+        
+        // Add detailed debug information (collapsible)
+        $html .= '<div class="eia-api-debug-info">';
+        $html .= '<p><a href="#" class="eia-toggle-debug-info">' . __('Show/Hide Debug Information', 'eia-fuel-surcharge') . '</a></p>';
+        $html .= '<div class="eia-debug-info-content" style="display:none;">';
+        
+        if (isset($test_result['debug_info']) && !empty($test_result['debug_info'])) {
+            $html .= '<h4>' . __('Request Details', 'eia-fuel-surcharge') . '</h4>';
+            $html .= '<pre style="background: #f5f5f5; padding: 10px; overflow: auto; max-height: 200px;">';
+            // Show URL (with API key redacted)
+            if (isset($test_result['debug_info']['request_url'])) {
+                $html .= 'URL: ' . esc_html($test_result['debug_info']['request_url']) . "\n";
+            }
+            if (isset($test_result['debug_info']['request_time'])) {
+                $html .= 'Time: ' . esc_html($test_result['debug_info']['request_time']) . "\n";
+            }
+            $html .= '</pre>';
+            
+            $html .= '<h4>' . __('Response Details', 'eia-fuel-surcharge') . '</h4>';
+            $html .= '<pre style="background: #f5f5f5; padding: 10px; overflow: auto; max-height: 200px;">';
+            if (isset($test_result['debug_info']['response_code'])) {
+                $html .= 'Code: ' . esc_html($test_result['debug_info']['response_code']) . "\n";
+            }
+            if (isset($test_result['debug_info']['response_time'])) {
+                $html .= 'Time: ' . esc_html($test_result['debug_info']['response_time']) . "\n";
+            }
+            if (isset($test_result['debug_info']['error'])) {
+                $html .= 'Error: ' . esc_html($test_result['debug_info']['error']) . "\n";
+            }
+            if (isset($test_result['debug_info']['json_parse_error']) && $test_result['debug_info']['json_parse_error']) {
+                $html .= 'JSON Error: ' . esc_html($test_result['debug_info']['json_parse_error']) . "\n";
+            }
+            
+            // Show sample of response body
+            if (isset($test_result['debug_info']['response_body_sample'])) {
+                $html .= "\nResponse Body Sample:\n" . esc_html($test_result['debug_info']['response_body_sample']) . "\n";
+            }
+            
+            $html .= '</pre>';
+        }
+        
+        $html .= '</div>'; // .eia-debug-info-content
+        $html .= '</div>'; // .eia-api-debug-info
+        
+        if ($test_result['success']) {
+            wp_send_json_success([
+                'message' => __('API connection successful', 'eia-fuel-surcharge'),
+                'html' => $html,
+                'debug_info' => $test_result['debug_info']
+            ]);
+        } else {
+            wp_send_json_error([
+                'message' => $test_result['message'],
+                'html' => $html,
+                'debug_info' => isset($test_result['debug_info']) ? $test_result['debug_info'] : null
+            ]);
         }
     }
 
-
     /**
-     * Handle manual update request.
+     * Handle manual update request via AJAX.
      *
      * @since    1.0.0
      */
     public function ajax_manual_update() {
         // Check nonce
         if (!check_ajax_referer('eia_fuel_surcharge_manual_update_ajax', 'nonce', false)) {
-            wp_send_json_error(['message' => __('Security check failed', 'eia-fuel-surcharge')]);
+            wp_send_json_error([
+                'message' => __('Security check failed', 'eia-fuel-surcharge')
+            ]);
+            return;
         }
         
         // Check for user capabilities
         if (!current_user_can('manage_options')) {
-            wp_send_json_error(['message' => __('You do not have sufficient permissions to perform this action', 'eia-fuel-surcharge')]);
+            wp_send_json_error([
+                'message' => __('You do not have sufficient permissions to perform this action', 'eia-fuel-surcharge')
+            ]);
+            return;
         }
         
         // Run the update
-        $scheduler = new \EIAFuelSurcharge\Core\Scheduler();
+        $scheduler = new Scheduler();
         $result = $scheduler->run_scheduled_update();
         
         // Send response
-        if ($result) {
-            wp_send_json_success(['message' => __('Fuel surcharge data updated successfully.', 'eia-fuel-surcharge')]);
+        if ($result === true || (is_array($result) && isset($result['success']) && $result['success'])) {
+            wp_send_json_success([
+                'message' => __('Fuel surcharge data updated successfully.', 'eia-fuel-surcharge')
+            ]);
         } else {
-            wp_send_json_error(['message' => __('Failed to update fuel surcharge data.', 'eia-fuel-surcharge')]);
+            // Handle the case where result is an array with error info
+            $error_message = __('Failed to update fuel surcharge data.', 'eia-fuel-surcharge');
+            
+            if (is_array($result) && isset($result['message'])) {
+                $error_message = $result['message'];
+            }
+            
+            wp_send_json_error([
+                'message' => $error_message
+            ]);
         }
     }
 
