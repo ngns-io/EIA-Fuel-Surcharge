@@ -63,12 +63,9 @@ if (!defined('WPINC')) {
                             echo '<p><em>' . __('No update currently scheduled.', 'eia-fuel-surcharge') . '</em></p>';
                         }
                         ?>
-                        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" style="margin-top: 10px;">
-                            <input type="hidden" name="action" value="eia_fuel_surcharge_manual_update">
-                            <?php wp_nonce_field('eia_fuel_surcharge_manual_update', 'eia_fuel_surcharge_nonce'); ?>
-                            <button type="submit" class="button"><?php _e('Update Now', 'eia-fuel-surcharge'); ?></button>
-                            <span class="description"><?php _e('Manually trigger an update from the EIA API.', 'eia-fuel-surcharge'); ?></span>
-                        </form>
+                        <button type="button" id="manual-update-button" class="button"><?php _e('Update Now', 'eia-fuel-surcharge'); ?></button>
+                        <span class="description"><?php _e('Manually trigger an update from the EIA API.', 'eia-fuel-surcharge'); ?></span>
+                        <span id="manual-update-status" style="display:none; margin-left: 10px;"></span>
                     </td>
                 </tr>
             </table>
@@ -264,26 +261,8 @@ if (!defined('WPINC')) {
             // Show the target tab content, hide others
             $('.eia-fuel-surcharge-tab-content').hide();
             $('#' + target).show();
-            
-            // Update active tab field
-            $('#active_tab').val(target);
-            
-            // Store the active tab in localStorage
-            if (typeof(Storage) !== "undefined") {
-                localStorage.setItem('eia_fuel_surcharge_active_tab', target);
-            }
         });
-        
-        // Check if we have a stored active tab
-        if (typeof(Storage) !== "undefined" && localStorage.getItem('eia_fuel_surcharge_active_tab')) {
-            var activeTab = localStorage.getItem('eia_fuel_surcharge_active_tab');
-            $('.eia-fuel-surcharge-tabs a[href="#' + activeTab + '"]').trigger('click');
-        } else {
-            // Default to first tab
-            $('.eia-fuel-surcharge-tab-content').hide();
-            $('#api').show();
-        }
-        
+
         // Update frequency change handler
         $('#update_frequency').on('change', function() {
             var frequency = $(this).val();
@@ -311,6 +290,51 @@ if (!defined('WPINC')) {
         
         // Trigger change event to set initial state
         $('#update_frequency').trigger('change');
+
+        // Ensure form includes all fields even if hidden
+        $('form').on('submit', function() {
+            // Make sure all fields from hidden tabs are included
+            return true; // Always allow form submission
+        });
+
+        // Manual update button handler
+        $('#manual-update-button').on('click', function() {
+            var $button = $(this);
+            var $status = $('#manual-update-status');
+            
+            // Disable the button and show loading state
+            $button.prop('disabled', true).text('<?php _e('Updating...', 'eia-fuel-surcharge'); ?>');
+            $status.text('').show();
+            
+            // Send AJAX request
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'eia_fuel_surcharge_manual_update_ajax',
+                    nonce: '<?php echo wp_create_nonce('eia_fuel_surcharge_manual_update_ajax'); ?>'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        $status.text('<?php _e('Update successful!', 'eia-fuel-surcharge'); ?>').css('color', 'green');
+                    } else {
+                        $status.text(response.data || '<?php _e('Update failed.', 'eia-fuel-surcharge'); ?>').css('color', 'red');
+                    }
+                },
+                error: function() {
+                    $status.text('<?php _e('Update failed. Please try again.', 'eia-fuel-surcharge'); ?>').css('color', 'red');
+                },
+                complete: function() {
+                    // Re-enable the button and restore original text
+                    $button.prop('disabled', false).text('<?php _e('Update Now', 'eia-fuel-surcharge'); ?>');
+                    
+                    // Hide status after 5 seconds
+                    setTimeout(function() {
+                        $status.fadeOut();
+                    }, 5000);
+                }
+            });
+        });
     });
 </script>
 

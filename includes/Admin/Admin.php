@@ -44,6 +44,7 @@ class Admin {
         
         // Set up admin AJAX handlers
         add_action('wp_ajax_eia_fuel_surcharge_test_api', [$this, 'ajax_test_api']);
+        add_action('wp_ajax_eia_fuel_surcharge_manual_update_ajax', [$this, 'ajax_manual_update']);
         
         // Set up admin post handlers
         add_action('admin_post_eia_fuel_surcharge_manual_update', [$this, 'handle_manual_update']);
@@ -92,20 +93,20 @@ class Admin {
      * @since    1.0.0
      */
     public function add_plugin_admin_menu() {
-        // Main menu item
+        // Main menu item that points to the settings page
         add_menu_page(
             __('EIA Fuel Surcharge', 'eia-fuel-surcharge'),
             __('Fuel Surcharge', 'eia-fuel-surcharge'),
             'manage_options',
-            $this->plugin_name,
-            [$this, 'display_plugin_setup_page'],
+            $this->plugin_name . '-settings', // Change this to point to settings
+            [$this, 'display_plugin_settings_page'], // Use the settings page callback
             'dashicons-chart-line',
             100
         );
         
-        // Settings submenu
+        // Add settings as the first submenu to override the duplicate
         add_submenu_page(
-            $this->plugin_name,
+            $this->plugin_name . '-settings',
             __('Settings', 'eia-fuel-surcharge'),
             __('Settings', 'eia-fuel-surcharge'),
             'manage_options',
@@ -115,7 +116,7 @@ class Admin {
         
         // Data submenu
         add_submenu_page(
-            $this->plugin_name,
+            $this->plugin_name . '-settings', // Change parent menu
             __('Data & History', 'eia-fuel-surcharge'),
             __('Data & History', 'eia-fuel-surcharge'),
             'manage_options',
@@ -125,7 +126,7 @@ class Admin {
         
         // Logs submenu
         add_submenu_page(
-            $this->plugin_name,
+            $this->plugin_name . '-settings', // Change parent menu
             __('Logs', 'eia-fuel-surcharge'),
             __('Logs', 'eia-fuel-surcharge'),
             'manage_options',
@@ -134,14 +135,14 @@ class Admin {
         );
     }
 
-    /**
+/**
      * Add settings action link to the plugins page.
      *
      * @since    1.0.0
      */
     public function add_action_links($links) {
         $settings_link = [
-            '<a href="' . admin_url('admin.php?page=' . $this->plugin_name) . '">' . __('Settings', 'eia-fuel-surcharge') . '</a>',
+            '<a href="' . admin_url('admin.php?page=' . $this->plugin_name . '-settings') . '">' . __('Settings', 'eia-fuel-surcharge') . '</a>',
         ];
         return array_merge($settings_link, $links);
     }
@@ -222,29 +223,33 @@ class Admin {
         }
     }
 
+
     /**
      * Handle manual update request.
      *
      * @since    1.0.0
      */
-    public function handle_manual_update() {
-        // Check for nonce
-        if (!isset($_POST['eia_fuel_surcharge_nonce']) || !wp_verify_nonce($_POST['eia_fuel_surcharge_nonce'], 'eia_fuel_surcharge_manual_update')) {
-            wp_die(__('Security check failed', 'eia-fuel-surcharge'));
+    public function ajax_manual_update() {
+        // Check nonce
+        if (!check_ajax_referer('eia_fuel_surcharge_manual_update_ajax', 'nonce', false)) {
+            wp_send_json_error(['message' => __('Security check failed', 'eia-fuel-surcharge')]);
         }
         
         // Check for user capabilities
         if (!current_user_can('manage_options')) {
-            wp_die(__('You do not have sufficient permissions to perform this action', 'eia-fuel-surcharge'));
+            wp_send_json_error(['message' => __('You do not have sufficient permissions to perform this action', 'eia-fuel-surcharge')]);
         }
         
         // Run the update
-        $scheduler = new Scheduler();
-        $scheduler->run_scheduled_update();
+        $scheduler = new \EIAFuelSurcharge\Core\Scheduler();
+        $result = $scheduler->run_scheduled_update();
         
-        // Redirect back to the admin page
-        wp_redirect(add_query_arg('update', 'success', wp_get_referer()));
-        exit;
+        // Send response
+        if ($result) {
+            wp_send_json_success(['message' => __('Fuel surcharge data updated successfully.', 'eia-fuel-surcharge')]);
+        } else {
+            wp_send_json_error(['message' => __('Failed to update fuel surcharge data.', 'eia-fuel-surcharge')]);
+        }
     }
 
     /**
