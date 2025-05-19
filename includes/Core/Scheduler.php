@@ -105,21 +105,26 @@ class Scheduler {
      * Run the scheduled update.
      *
      * @since    1.0.0
+     * @param    bool      $force_refresh    Whether to force a refresh from the API.
+     * @return   mixed     True on success, array with error details on failure.
      */
-    public function run_scheduled_update() {
+    public function run_scheduled_update($force_refresh = false) {
         // Get API handler
         $api_handler = new EIAHandler();
         
         // Log that the update is running
         $this->logger->log_update_start();
         
-        // Get the latest diesel prices
-        $api_data = $api_handler->get_diesel_prices();
+        // Get the latest diesel prices - pass force_refresh parameter
+        $api_data = $api_handler->get_diesel_prices($force_refresh);
         
         // Check for API errors
         if (is_wp_error($api_data)) {
             $this->logger->log_update_error($api_data->get_error_message());
-            return;
+            return [
+                'success' => false,
+                'message' => $api_data->get_error_message()
+            ];
         }
         
         // Process the API data
@@ -127,8 +132,13 @@ class Scheduler {
         
         // Check if we got any data
         if (empty($processed_data)) {
-            $this->logger->log_update_error('No data returned from API or data processing failed');
-            return;
+            $error_message = 'No data returned from API or data processing failed';
+            $this->logger->log_update_error($error_message);
+            return [
+                'success' => false, 
+                'message' => __($error_message, 'eia-fuel-surcharge'),
+                'api_data' => $api_data
+            ];
         }
         
         // Save the data to the database
@@ -136,8 +146,15 @@ class Scheduler {
         
         if ($save_result) {
             $this->logger->log_update_success();
+            return true;
         } else {
-            $this->logger->log_update_error('Failed to save data to database');
+            $error_message = 'Failed to save data to database';
+            $this->logger->log_update_error($error_message);
+            return [
+                'success' => false,
+                'message' => __($error_message, 'eia-fuel-surcharge'),
+                'save_result' => $save_result
+            ];
         }
     }
 

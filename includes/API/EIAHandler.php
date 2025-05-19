@@ -154,26 +154,33 @@ class EIAHandler {
     }
 
     /**
-     * Fetch the latest diesel fuel price data from the EIA API.
+     * Get the latest diesel fuel price data from the EIA API.
      *
      * @since    1.0.0
      * @param    bool     $force_refresh    Whether to force a refresh from the API.
+     * @param    string   $region_code      Optional region code to override the default.
      * @return   array|WP_Error    The API response data or WP_Error on failure.
      */
-    public function get_diesel_prices($force_refresh = false) {
+    public function get_diesel_prices($force_refresh = false, $region_code = null) {
         // Check if API key is set
         if (empty($this->api_key)) {
             return new \WP_Error('missing_api_key', __('EIA API key is missing. Please enter it in the plugin settings.', 'eia-fuel-surcharge'));
         }
 
-        // Build the API endpoint URL for on-highway diesel prices
+        // Get settings
+        $options = get_option('eia_fuel_surcharge_settings');
+        
+        // Get the region from settings or use the provided override
+        $region = $region_code ?? $this->get_region_code_from_setting($options['region'] ?? 'national');
+        
+        // Build the API endpoint URL for diesel prices
         $endpoint = 'petroleum/pri/gnd/data/';
         
         // Set query parameters
         $params = [
             'api_key'             => $this->api_key,
             'data[]'              => 'value',
-            'facets[duoarea][]'   => 'DHHWY', // On-highway diesel (national average)
+            'facets[duoarea][]'   => $region, // Use the configured region code
             'frequency'           => 'weekly',
             'sort[0][column]'     => 'period',
             'sort[0][direction]'  => 'desc',
@@ -209,6 +216,56 @@ class EIAHandler {
         
         // Return the data
         return $response;
+    }
+
+    /**
+     * Convert internal region name to EIA API region code.
+     *
+     * @since    2.0.0
+     * @param    string    $region_name    The internal region name.
+     * @return   string    The EIA API region code.
+     */
+    private function get_region_code_from_setting($region_name) {
+        // Map internal region names to EIA API region codes
+        $region_mapping = [
+            // National and PADD Regions
+            'national' => 'NUS',
+            'east_coast' => 'R1Z',
+            'new_england' => 'R1X',
+            'central_atlantic' => 'R1Y',
+            'lower_atlantic' => 'R1Z',
+            'midwest' => 'R20',
+            'gulf_coast' => 'R30',
+            'rocky_mountain' => 'R40',
+            'west_coast' => 'R50',
+            'west_coast_no_ca' => 'R5XCA',
+            
+            // States
+            'california_state' => 'SCA',
+            'colorado' => 'SCO',
+            'florida' => 'SFL',
+            'massachusetts' => 'SMA',
+            'minnesota' => 'SMN',
+            'new_york' => 'SNY',
+            'ohio' => 'SOH',
+            'texas' => 'STX',
+            'washington' => 'SWA',
+            
+            // Cities
+            'los_angeles' => 'Y05LA',
+            'san_francisco' => 'Y05SF',
+            'new_york_city' => 'Y35NY',
+            'houston' => 'Y44HO',
+            'seattle' => 'Y48SE',
+            'boston' => 'YBOS',
+            'cleveland' => 'YCLE',
+            'denver' => 'YDEN',
+            'miami' => 'YMIA',
+            'chicago' => 'YORD',
+        ];
+        
+        // Return the mapped code or default to national if not found
+        return $region_mapping[$region_name] ?? 'NUS';
     }
 
     /**
@@ -361,10 +418,23 @@ class EIAHandler {
     public function process_diesel_price_data($api_data) {
         $processed_data = [];
         
+        // Get settings to determine the region name
+        $options = get_option('eia_fuel_surcharge_settings');
+        $region_name = $options['region'] ?? 'national';
+        
         // Check if the response has the expected structure
         if (!isset($api_data['response']['data']) || !is_array($api_data['response']['data'])) {
             $this->logger->log('data_processing_error', __('API response does not have the expected structure', 'eia-fuel-surcharge'));
             return $processed_data;
+        }
+        
+        // Get the region code used in the request
+        $region_code = isset($api_data['request']['params']['facets']['duoarea'][0]) ? 
+                    $api_data['request']['params']['facets']['duoarea'][0] : 'NUS';
+        
+        // Reverse lookup the region name if needed
+        if (isset($api_data['request']['params']['facets']['duoarea'][0])) {
+            $region_name = $this->get_region_name_from_code($api_data['request']['params']['facets']['duoarea'][0]) ?? $region_name;
         }
         
         // Process each price entry
@@ -396,11 +466,11 @@ class EIAHandler {
             // Convert date from YYYY-MM-DD format to a timestamp
             $date = strtotime($entry['period']);
             
-            // Add the processed data
+            // Add the processed data - use the actual region name from the request
             $processed_data[] = [
                 'date'          => date('Y-m-d', $date),
                 'diesel_price'  => floatval($entry['value']),
-                'region'        => 'national', // Default to national average
+                'region'        => $region_name,
             ];
         }
         
@@ -408,12 +478,61 @@ class EIAHandler {
             $this->logger->log('data_processing_error', __('No valid data entries found in API response', 'eia-fuel-surcharge'));
         } else {
             $this->logger->log('data_processing_success', sprintf(
-                __('Successfully processed %d data entries', 'eia-fuel-surcharge'),
-                count($processed_data)
+                __('Successfully processed %d data entries for region %s', 'eia-fuel-surcharge'),
+                count($processed_data),
+                $region_name
             ));
         }
         
         return $processed_data;
+    }
+
+    /**
+     * Convert EIA API region code to internal region name.
+     *
+     * @since    2.0.0
+     * @param    string    $region_code    The EIA API region code.
+     * @return   string|null    The internal region name or null if not found.
+     */
+    private function get_region_name_from_code($region_code) {
+        // Map EIA API region codes to internal region names
+        $code_mapping = [
+            // National and PADD Regions
+            'NUS' => 'national',
+            'R1X' => 'new_england',
+            'R1Y' => 'central_atlantic',
+            'R1Z' => 'lower_atlantic',
+            'R20' => 'midwest',
+            'R30' => 'gulf_coast',
+            'R40' => 'rocky_mountain',
+            'R50' => 'west_coast',
+            'R5XCA' => 'west_coast_no_ca',
+            
+            // States
+            'SCA' => 'california_state',
+            'SCO' => 'colorado',
+            'SFL' => 'florida',
+            'SMA' => 'massachusetts',
+            'SMN' => 'minnesota',
+            'SNY' => 'new_york',
+            'SOH' => 'ohio',
+            'STX' => 'texas',
+            'SWA' => 'washington',
+            
+            // Cities
+            'Y05LA' => 'los_angeles',
+            'Y05SF' => 'san_francisco',
+            'Y35NY' => 'new_york_city',
+            'Y44HO' => 'houston',
+            'Y48SE' => 'seattle',
+            'YBOS' => 'boston',
+            'YCLE' => 'cleveland',
+            'YDEN' => 'denver',
+            'YMIA' => 'miami',
+            'YORD' => 'chicago',
+        ];
+        
+        return $code_mapping[$region_code] ?? null;
     }
 
     /**
@@ -567,7 +686,7 @@ class EIAHandler {
         $params = [
             'api_key'             => $test_api_key,
             'data[]'              => 'value',
-            'facets[duoarea][]'   => 'DHHWY',
+            'facets[duoarea][]'   => 'NUS',
             'frequency'           => 'weekly',
             'length'              => 1
         ];
@@ -994,7 +1113,7 @@ class EIAHandler {
     }
 
     /**
-     * Get regional diesel prices.
+     * Get regional diesel prices with expanded region support.
      *
      * @since    2.0.0
      * @param    bool      $force_refresh    Whether to force a refresh from the API.
@@ -1020,18 +1139,41 @@ class EIAHandler {
             'length'              => 10 // Get the 10 most recent records for each region
         ];
         
-        // Define regions to fetch
+        // Define regions to fetch with updated codes
         $regions = [
-            'DHUSR' => 'national',  // US
-            'DHR10' => 'east_coast', // East Coast
-            'DHR1Z' => 'new_england', // New England
-            'DHR1Y' => 'central_atlantic', // Central Atlantic
-            'DHR1X' => 'lower_atlantic', // Lower Atlantic
-            'DHR20' => 'midwest', // Midwest
-            'DHR30' => 'gulf_coast', // Gulf Coast
-            'DHR40' => 'rocky_mountain', // Rocky Mountain
-            'DHR50' => 'west_coast', // West Coast
-            'DHR5CA' => 'california' // California
+            // National and PADD Regions
+            'NUS' => 'national',      // U.S. National Average
+            'R1X' => 'new_england',   // PADD 1A (New England)
+            'R1Y' => 'central_atlantic', // PADD 1B (Central Atlantic)
+            'R1Z' => 'lower_atlantic', // PADD 1C (Lower Atlantic)
+            'R20' => 'midwest',        // PADD 2 (Midwest)
+            'R30' => 'gulf_coast',     // PADD 3 (Gulf Coast)
+            'R40' => 'rocky_mountain', // PADD 4 (Rocky Mountain)
+            'R50' => 'west_coast',     // PADD 5 (West Coast)
+            'R5XCA' => 'west_coast_no_ca', // PADD 5 excluding California
+            
+            // Selected States
+            'SCA' => 'california_state', // California state
+            'SCO' => 'colorado',      // Colorado state
+            'SFL' => 'florida',       // Florida state
+            'SMA' => 'massachusetts',      // Massachusetts state
+            'SMN' => 'minnesota',      // Minnesota state
+            'SNY' => 'new_york',      // New York state
+            'SOH' => 'ohio',          // Ohio state
+            'STX' => 'texas',         // Texas state
+            'SWA' => 'washington',      // Washington state
+            
+            // Major Cities
+            'Y05LA' => 'los_angeles',  // Los Angeles
+            'Y05SF' => 'san_francisco', // San Francisco
+            'Y35NY' => 'new_york_city', // New York City
+            'Y44HO' => 'houston',      // Houston
+            'Y48SE' => 'seattle',      // Seattle
+            'YBOS' => 'boston',       // Boston
+            'YCLE' => 'cleveland',      // Detroit
+            'YDEN' => 'denver',       // Denver
+            'YMIA' => 'miami',        // Miami
+            'YORD' => 'chicago',      // Chicago
         ];
         
         $all_data = [];

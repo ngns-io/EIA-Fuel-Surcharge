@@ -65,14 +65,13 @@ if (!defined('WPINC')) {
                         ?>
                         <button type="button" id="manual-update-button" class="button"><?php _e('Update Now', 'eia-fuel-surcharge'); ?></button>
                         <span class="description"><?php _e('Manually trigger an update from the EIA API.', 'eia-fuel-surcharge'); ?></span>
-                        <span id="manual-update-status" style="display:none; margin-left: 10px;"></span>
                         
                         <!-- Add results container similar to API test -->
                         <div id="manual-update-results" class="eia-api-test-results" style="margin-top: 15px;"></div>
                     </td>
                 </tr>
             </table>
-            
+
         </div>
 
         <!-- Display Settings Tab -->
@@ -111,7 +110,7 @@ if (!defined('WPINC')) {
                 
                 <div class="shortcode-example">
                     <h3><?php _e('Regional Display', 'eia-fuel-surcharge'); ?></h3>
-                    <code>[fuel_surcharge region="east_coast"]</code>
+                    <code>[fuel_surcharge region="new_york"]</code>
                     <p class="description"><?php _e('Displays the fuel surcharge rate for a specific region.', 'eia-fuel-surcharge'); ?></p>
                 </div>
             </div>
@@ -158,7 +157,7 @@ if (!defined('WPINC')) {
                             <td><code>region</code></td>
                             <td><?php _e('Region for the fuel price data', 'eia-fuel-surcharge'); ?></td>
                             <td><?php _e('Setting from plugin options', 'eia-fuel-surcharge'); ?></td>
-                            <td><code>region="east_coast"</code></td>
+                            <td><code>region="midwest"</code></td>
                         </tr>
                         <tr>
                             <td><code>compare</code></td>

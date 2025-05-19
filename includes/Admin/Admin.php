@@ -328,9 +328,9 @@ class Admin {
             return;
         }
         
-        // Run the update
+        // Run the update with force_refresh = true to bypass cache
         $scheduler = new Scheduler();
-        $result = $scheduler->run_scheduled_update();
+        $result = $scheduler->run_scheduled_update(true);
         
         // Send response
         if ($result === true || (is_array($result) && isset($result['success']) && $result['success'])) {

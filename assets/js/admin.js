@@ -121,15 +121,17 @@
         // Manual update button handler with proper error handling and detailed debug info
         $('#manual-update-button').on('click', function() {
             var $button = $(this);
-            var $status = $('#manual-update-status');
+            var $resultsContainer = $('#manual-update-results');
             var originalText = $button.text();
             
             // Clear previous results
-            $('#manual-update-results').empty();
+            $resultsContainer.empty();
             
             // Disable the button and show loading state
             $button.prop('disabled', true).text(eia_fuel_surcharge_params.i18n.updating || 'Updating...');
-            $status.text('').show();
+            
+            // Add initial loading message to the results container
+            $resultsContainer.html('<div class="eia-loading-message"><p>' + (eia_fuel_surcharge_params.i18n.updating || 'Updating...') + '...</p></div>');
             
             // Send AJAX request
             $.ajax({
@@ -140,15 +142,13 @@
                     nonce: eia_fuel_surcharge_params.manual_update_nonce // Use the correct nonce
                 },
                 success: function(response) {
+                    // Clear the loading message
+                    $resultsContainer.empty();
+                    
                     // Check if response is valid
                     if (response && typeof response === 'object') {
-                        // Add detailed results like the API test
-                        var $resultsContainer = $('#manual-update-results');
-                        
                         if (response.success) {
                             // Success case
-                            $status.text(response.data.message || 'Update successful!').css('color', 'green');
-                            
                             $resultsContainer.html('<div class="notice notice-success inline">' +
                                 '<p><strong>' + (response.data.message || 'Update successful!') + '</strong></p>' +
                                 '</div>');
@@ -161,8 +161,6 @@
                             } else if (response.data && typeof response.data === 'string') {
                                 errorMessage = response.data;
                             }
-                            
-                            $status.text(errorMessage).css('color', 'red');
                             
                             // Create detailed error display
                             var html = '<div class="notice notice-error inline">' +
@@ -189,27 +187,20 @@
                         }
                     } else {
                         // Invalid response
-                        $status.text('Received invalid response from server').css('color', 'red');
-                        $('#manual-update-results').html('<div class="notice notice-error inline">' +
+                        $resultsContainer.html('<div class="notice notice-error inline">' +
                             '<p>Received invalid response from server</p>' +
                             '</div>');
                     }
                 },
                 error: function(xhr, status, error) {
                     // Handle AJAX errors
-                    $status.text('Update failed: ' + error).css('color', 'red');
-                    $('#manual-update-results').html('<div class="notice notice-error inline">' +
+                    $resultsContainer.html('<div class="notice notice-error inline">' +
                         '<p>AJAX Error: ' + error + '</p>' +
                         '</div>');
                 },
                 complete: function() {
                     // Re-enable the button and restore original text
                     $button.prop('disabled', false).text(originalText);
-                    
-                    // Hide status after 5 seconds
-                    setTimeout(function() {
-                        $status.fadeOut();
-                    }, 5000);
                 }
             });
         });

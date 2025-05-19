@@ -370,20 +370,51 @@ class Settings {
         $region = isset($options['region']) ? $options['region'] : 'national';
         
         echo '<select id="region" name="eia_fuel_surcharge_settings[region]">';
-        echo '<option value="national" ' . selected($region, 'national', false) . '>' . __('National Average', 'eia-fuel-surcharge') . '</option>';
-        echo '<option value="east_coast" ' . selected($region, 'east_coast', false) . '>' . __('East Coast', 'eia-fuel-surcharge') . '</option>';
-        echo '<option value="new_england" ' . selected($region, 'new_england', false) . '>' . __('New England', 'eia-fuel-surcharge') . '</option>';
-        echo '<option value="central_atlantic" ' . selected($region, 'central_atlantic', false) . '>' . __('Central Atlantic', 'eia-fuel-surcharge') . '</option>';
-        echo '<option value="lower_atlantic" ' . selected($region, 'lower_atlantic', false) . '>' . __('Lower Atlantic', 'eia-fuel-surcharge') . '</option>';
-        echo '<option value="midwest" ' . selected($region, 'midwest', false) . '>' . __('Midwest', 'eia-fuel-surcharge') . '</option>';
-        echo '<option value="gulf_coast" ' . selected($region, 'gulf_coast', false) . '>' . __('Gulf Coast', 'eia-fuel-surcharge') . '</option>';
-        echo '<option value="rocky_mountain" ' . selected($region, 'rocky_mountain', false) . '>' . __('Rocky Mountain', 'eia-fuel-surcharge') . '</option>';
-        echo '<option value="west_coast" ' . selected($region, 'west_coast', false) . '>' . __('West Coast', 'eia-fuel-surcharge') . '</option>';
-        echo '<option value="california" ' . selected($region, 'california', false) . '>' . __('California', 'eia-fuel-surcharge') . '</option>';
+        
+        // National and PADD Regions
+        echo '<optgroup label="' . __('National and PADD Regions', 'eia-fuel-surcharge') . '">';
+        echo '<option value="national" ' . selected($region, 'national', false) . '>' . __('U.S. National Average', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="new_england" ' . selected($region, 'new_england', false) . '>' . __('New England (PADD 1A)', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="central_atlantic" ' . selected($region, 'central_atlantic', false) . '>' . __('Central Atlantic (PADD 1B)', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="lower_atlantic" ' . selected($region, 'lower_atlantic', false) . '>' . __('Lower Atlantic (PADD 1C)', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="midwest" ' . selected($region, 'midwest', false) . '>' . __('Midwest (PADD 2)', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="gulf_coast" ' . selected($region, 'gulf_coast', false) . '>' . __('Gulf Coast (PADD 3)', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="rocky_mountain" ' . selected($region, 'rocky_mountain', false) . '>' . __('Rocky Mountain (PADD 4)', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="west_coast" ' . selected($region, 'west_coast', false) . '>' . __('West Coast (PADD 5)', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="west_coast_no_ca" ' . selected($region, 'west_coast_no_ca', false) . '>' . __('West Coast less California', 'eia-fuel-surcharge') . '</option>';
+        echo '</optgroup>';
+        
+        // States
+        echo '<optgroup label="' . __('States', 'eia-fuel-surcharge') . '">';
+        echo '<option value="california_state" ' . selected($region, 'california_state', false) . '>' . __('California', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="colorado" ' . selected($region, 'colorado', false) . '>' . __('Colorado', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="florida" ' . selected($region, 'florida', false) . '>' . __('Florida', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="massachusetts" ' . selected($region, 'massachusetts', false) . '>' . __('Massachusetts', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="minnesota" ' . selected($region, 'minnesota', false) . '>' . __('Minnesota', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="new_york" ' . selected($region, 'new_york', false) . '>' . __('New York', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="ohio" ' . selected($region, 'ohio', false) . '>' . __('Ohio', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="texas" ' . selected($region, 'texas', false) . '>' . __('Texas', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="washington" ' . selected($region, 'washington', false) . '>' . __('Washington', 'eia-fuel-surcharge') . '</option>';
+        echo '</optgroup>';
+        
+        // Cities
+        echo '<optgroup label="' . __('Major Cities', 'eia-fuel-surcharge') . '">';
+        echo '<option value="los_angeles" ' . selected($region, 'los_angeles', false) . '>' . __('Los Angeles', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="san_francisco" ' . selected($region, 'san_francisco', false) . '>' . __('San Francisco', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="new_york_city" ' . selected($region, 'new_york_city', false) . '>' . __('New York City', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="houston" ' . selected($region, 'houston', false) . '>' . __('Houston', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="seattle" ' . selected($region, 'seattle', false) . '>' . __('Seattle', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="boston" ' . selected($region, 'boston', false) . '>' . __('Boston', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="cleveland" ' . selected($region, 'cleveland', false) . '>' . __('Cleveland', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="denver" ' . selected($region, 'denver', false) . '>' . __('Denver', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="miami" ' . selected($region, 'miami', false) . '>' . __('Miami', 'eia-fuel-surcharge') . '</option>';
+        echo '<option value="chicago" ' . selected($region, 'chicago', false) . '>' . __('Chicago', 'eia-fuel-surcharge') . '</option>';
+        echo '</optgroup>';
+        
         echo '</select>';
         echo '<p class="description">' . __('Select the default region for fuel price data.', 'eia-fuel-surcharge') . '</p>';
     }
-    
+
     public function cache_duration_field_callback() {
         $options = get_option('eia_fuel_surcharge_settings');
         $cache_duration = isset($options['cache_duration']) ? intval($options['cache_duration']) : 60;
