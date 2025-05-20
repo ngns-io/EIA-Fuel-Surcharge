@@ -47,6 +47,7 @@ class Admin {
         add_action('wp_ajax_eia_fuel_surcharge_manual_update_ajax', [$this, 'ajax_manual_update']);
         
         // Set up admin post handlers
+        add_action('admin_post_eia_fuel_surcharge_manual_update', [$this, 'handle_manual_update']);
         add_action('admin_post_eia_fuel_surcharge_clear_data', [$this, 'handle_clear_data']);
         add_action('admin_post_eia_fuel_surcharge_clear_logs', [$this, 'handle_clear_logs']);
         add_action('admin_post_eia_fuel_surcharge_export_data', [$this, 'handle_export_data']);
@@ -77,12 +78,20 @@ class Admin {
             'i18n'     => [
                 'enter_api_key'        => __('Please enter an API key to test.', 'eia-fuel-surcharge'),
                 'testing'              => __('Testing...', 'eia-fuel-surcharge'),
+                'updating'             => __('Updating...', 'eia-fuel-surcharge'),
+                'update_success'       => __('Update Successful!', 'eia-fuel-surcharge'),
+                'update_failed'        => __('Update Failed', 'eia-fuel-surcharge'),
                 'api_test_success'     => __('API connection successful!', 'eia-fuel-surcharge'),
                 'api_test_error'       => __('API connection failed', 'eia-fuel-surcharge'),
                 'ajax_error'           => __('Error processing request. Please try again.', 'eia-fuel-surcharge'),
                 'test_api_key'         => __('Test API Key', 'eia-fuel-surcharge'),
                 'confirm_clear_data'   => __('Are you sure you want to clear all fuel surcharge data? This cannot be undone.', 'eia-fuel-surcharge'),
                 'confirm_clear_logs'   => __('Are you sure you want to clear all logs? This cannot be undone.', 'eia-fuel-surcharge'),
+                'update_stats'         => __('Update Statistics', 'eia-fuel-surcharge'),
+                'records_inserted'     => __('new records inserted', 'eia-fuel-surcharge'),
+                'records_updated'      => __('existing records updated', 'eia-fuel-surcharge'),
+                'records_skipped'      => __('records unchanged', 'eia-fuel-surcharge'),
+                'show_debug'           => __('Show/Hide Debug Information', 'eia-fuel-surcharge'),
             ],
         ]);
     }
@@ -135,7 +144,7 @@ class Admin {
         );
     }
 
-/**
+    /**
      * Add settings action link to the plugins page.
      *
      * @since    1.0.0
@@ -333,9 +342,14 @@ class Admin {
         $result = $scheduler->run_scheduled_update(true);
         
         // Send response
-        if ($result === true || (is_array($result) && isset($result['success']) && $result['success'])) {
+        if ($result === true) {
             wp_send_json_success([
                 'message' => __('Fuel surcharge data updated successfully.', 'eia-fuel-surcharge')
+            ]);
+        } elseif (is_array($result) && isset($result['success']) && $result['success']) {
+            wp_send_json_success([
+                'message' => __('Fuel surcharge data updated successfully.', 'eia-fuel-surcharge'),
+                'stats' => isset($result['stats']) ? $result['stats'] : null
             ]);
         } else {
             // Handle the case where result is an array with error info
@@ -349,6 +363,45 @@ class Admin {
                 'message' => $error_message,
                 'debug' => $result
             ]);
+        }
+    }
+
+    /**
+     * Handle manual update request via form submission.
+     *
+     * @since    1.0.0
+     */
+    public function handle_manual_update() {
+        // Check for nonce
+        if (!isset($_POST['eia_fuel_surcharge_nonce']) || !wp_verify_nonce($_POST['eia_fuel_surcharge_nonce'], 'eia_fuel_surcharge_manual_update')) {
+            wp_die(__('Security check failed', 'eia-fuel-surcharge'));
+        }
+        
+        // Check for user capabilities
+        if (!current_user_can('manage_options')) {
+            wp_die(__('You do not have sufficient permissions to perform this action', 'eia-fuel-surcharge'));
+        }
+        
+        // Run the update with force_refresh = true to bypass cache
+        $scheduler = new Scheduler();
+        $result = $scheduler->run_scheduled_update(true);
+        
+        // Check the result
+        if ($result === true || (is_array($result) && isset($result['success']) && $result['success'])) {
+            // Redirect back to the admin page with success message
+            wp_redirect(add_query_arg('update', 'success', wp_get_referer()));
+            exit;
+        } else {
+            // Get error message
+            $error_message = __('Failed to update fuel surcharge data.', 'eia-fuel-surcharge');
+            
+            if (is_array($result) && isset($result['message'])) {
+                $error_message = $result['message'];
+            }
+            
+            // Redirect back with error message
+            wp_redirect(add_query_arg('error', urlencode($error_message), wp_get_referer()));
+            exit;
         }
     }
 

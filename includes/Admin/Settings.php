@@ -81,7 +81,7 @@ class Settings {
             'eia_fuel_surcharge_api',
             'eia_fuel_surcharge_api_section'
         );
-        
+
         // Cache Duration field
         add_settings_field(
             'cache_duration',
@@ -105,6 +105,15 @@ class Settings {
             'eia_source_link',
             __('Show EIA Source Link', 'eia-fuel-surcharge'),
             [$this, 'eia_source_link_field_callback'],
+            'eia_fuel_surcharge_api',
+            'eia_fuel_surcharge_api_section'
+        );
+
+        // Update Regions field
+        add_settings_field(
+            'update_regions',
+            __('Update Regional Data', 'eia-fuel-surcharge'),
+            [$this, 'update_regions_field_callback'],
             'eia_fuel_surcharge_api',
             'eia_fuel_surcharge_api_section'
         );
@@ -295,6 +304,7 @@ class Settings {
         $validated['percentage_rate'] = isset($input['percentage_rate']) ? floatval($input['percentage_rate']) : 0.5;
         
         // Schedule settings
+        $validated['update_regions'] = isset($input['update_regions']) ? 'true' : 'false';
         $validated['update_frequency'] = isset($input['update_frequency']) ? sanitize_text_field($input['update_frequency']) : 'weekly';
         $validated['update_day'] = isset($input['update_day']) ? sanitize_text_field($input['update_day']) : 'tuesday';
         $validated['update_day_of_month'] = isset($input['update_day_of_month']) ? sanitize_text_field($input['update_day_of_month']) : '1';
@@ -621,5 +631,21 @@ class Settings {
         }
         echo '</select>';
         echo '<p class="description">' . __('The default period to compare current rates with.', 'eia-fuel-surcharge') . '</p>';
+    }
+
+    /**
+     * Callback for the update regions field.
+     * 
+     * @since    2.0.0
+     */
+    public function update_regions_field_callback() {
+        $options = get_option('eia_fuel_surcharge_settings');
+        $update_regions = isset($options['update_regions']) ? $options['update_regions'] : 'false';
+        
+        echo '<label for="update_regions">';
+        echo '<input type="checkbox" id="update_regions" name="eia_fuel_surcharge_settings[update_regions]" value="true" ' . checked($update_regions, 'true', false) . ' />';
+        echo __('Also update regional data (PADDs, states, cities) during scheduled updates.', 'eia-fuel-surcharge');
+        echo '</label>';
+        echo '<p class="description">' . __('Enabling this will retrieve and store data for multiple regions, which may increase API usage.', 'eia-fuel-surcharge') . '</p>';
     }
 }

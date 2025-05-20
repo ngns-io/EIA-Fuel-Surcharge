@@ -121,86 +121,107 @@
         // Manual update button handler with proper error handling and detailed debug info
         $('#manual-update-button').on('click', function() {
             var $button = $(this);
+            var $spinner = $button.parent().find('.spinner');
             var $resultsContainer = $('#manual-update-results');
             var originalText = $button.text();
             
             // Clear previous results
-            $resultsContainer.empty();
+            $resultsContainer.removeClass('success error').empty();
             
             // Disable the button and show loading state
-            $button.prop('disabled', true).text(eia_fuel_surcharge_params.i18n.updating || 'Updating...');
-            
-            // Add initial loading message to the results container
-            $resultsContainer.html('<div class="eia-loading-message"><p>' + (eia_fuel_surcharge_params.i18n.updating || 'Updating...') + '...</p></div>');
+            $button.prop('disabled', true);
+            $spinner.addClass('is-active');
+            $resultsContainer.addClass('loading').html('<p>' + (eia_fuel_surcharge_params.i18n.updating || 'Updating...') + '...</p>');
             
             // Send AJAX request
             $.ajax({
-                url: ajaxurl, // WordPress AJAX URL
+                url: eia_fuel_surcharge_params.ajax_url,
                 type: 'POST',
                 data: {
                     action: 'eia_fuel_surcharge_manual_update_ajax',
-                    nonce: eia_fuel_surcharge_params.manual_update_nonce // Use the correct nonce
+                    nonce: eia_fuel_surcharge_params.manual_update_nonce
                 },
                 success: function(response) {
-                    // Clear the loading message
-                    $resultsContainer.empty();
+                    // Clear the loading class
+                    $resultsContainer.removeClass('loading');
                     
                     // Check if response is valid
                     if (response && typeof response === 'object') {
                         if (response.success) {
                             // Success case
-                            $resultsContainer.html('<div class="notice notice-success inline">' +
-                                '<p><strong>' + (response.data.message || 'Update successful!') + '</strong></p>' +
-                                '</div>');
+                            $resultsContainer.addClass('success').empty();
+                            
+                            var html = '<h3>' + eia_fuel_surcharge_params.i18n.update_success + '</h3>';
+                            html += '<p>' + (response.data.message || 'Data updated successfully.') + '</p>';
+                            
+                            // Add stats if available
+                            if (response.data.stats) {
+                                html += '<div class="eia-update-stats">';
+                                html += '<h4>' + eia_fuel_surcharge_params.i18n.update_stats + '</h4>';
+                                html += '<ul>';
+                                if (response.data.stats.inserted > 0) {
+                                    html += '<li>' + response.data.stats.inserted + ' ' + eia_fuel_surcharge_params.i18n.records_inserted + '</li>';
+                                }
+                                if (response.data.stats.updated > 0) {
+                                    html += '<li>' + response.data.stats.updated + ' ' + eia_fuel_surcharge_params.i18n.records_updated + '</li>';
+                                }
+                                if (response.data.stats.skipped > 0) {
+                                    html += '<li>' + response.data.stats.skipped + ' ' + eia_fuel_surcharge_params.i18n.records_skipped + '</li>';
+                                }
+                                html += '</ul>';
+                                html += '</div>';
+                            }
+                            
+                            $resultsContainer.html(html).show();
+                            
+                            // Reload the page after short delay to show updated data
+                            setTimeout(function() {
+                                window.location.reload();
+                            }, 3000);
                         } else {
                             // Error case
-                            var errorMessage = 'Update failed.';
+                            $resultsContainer.addClass('error').empty();
                             
-                            if (response.data && typeof response.data === 'object' && response.data.message) {
-                                errorMessage = response.data.message;
-                            } else if (response.data && typeof response.data === 'string') {
-                                errorMessage = response.data;
-                            }
-                            
-                            // Create detailed error display
-                            var html = '<div class="notice notice-error inline">' +
-                                '<p><strong>Update failed</strong></p>' +
-                                '<p>' + errorMessage + '</p>' +
-                                '</div>';
+                            var html = '<h3>' + eia_fuel_surcharge_params.i18n.update_failed + '</h3>';
+                            html += '<p>' + (response.data.message || 'Unknown error occurred.') + '</p>';
                             
                             // Add debug info if available
-                            if (response.data && response.data.debug) {
-                                html += '<div class="eia-api-debug-info">' +
-                                    '<p><a href="#" class="eia-toggle-debug-info">Show/Hide Debug Information</a></p>' +
-                                    '<div class="eia-debug-info-content" style="display:none;">' +
-                                    '<pre>' + JSON.stringify(response.data.debug, null, 2) + '</pre>' +
-                                    '</div></div>';
+                            if (response.data.debug) {
+                                html += '<div class="eia-debug-info">';
+                                html += '<p><a href="#" class="eia-toggle-debug-info">' + eia_fuel_surcharge_params.i18n.show_debug + '</a></p>';
+                                html += '<div class="eia-debug-info-content" style="display:none;">';
+                                html += '<pre>' + JSON.stringify(response.data.debug, null, 2) + '</pre>';
+                                html += '</div>';
+                                html += '</div>';
                             }
                             
-                            $resultsContainer.html(html);
+                            $resultsContainer.html(html).show();
                             
                             // Add toggle functionality for debug info
                             $resultsContainer.find('.eia-toggle-debug-info').on('click', function(e) {
                                 e.preventDefault();
-                                $(this).closest('.eia-api-debug-info').find('.eia-debug-info-content').slideToggle();
+                                $(this).closest('.eia-debug-info').find('.eia-debug-info-content').slideToggle();
                             });
                         }
                     } else {
                         // Invalid response
-                        $resultsContainer.html('<div class="notice notice-error inline">' +
-                            '<p>Received invalid response from server</p>' +
-                            '</div>');
+                        $resultsContainer.addClass('error').html(
+                            '<h3>' + eia_fuel_surcharge_params.i18n.update_failed + '</h3>' +
+                            '<p>Received invalid response from server</p>'
+                        ).show();
                     }
                 },
                 error: function(xhr, status, error) {
                     // Handle AJAX errors
-                    $resultsContainer.html('<div class="notice notice-error inline">' +
-                        '<p>AJAX Error: ' + error + '</p>' +
-                        '</div>');
+                    $resultsContainer.removeClass('loading').addClass('error').html(
+                        '<h3>' + eia_fuel_surcharge_params.i18n.update_failed + '</h3>' +
+                        '<p>' + eia_fuel_surcharge_params.i18n.ajax_error + ': ' + error + '</p>'
+                    ).show();
                 },
                 complete: function() {
-                    // Re-enable the button and restore original text
-                    $button.prop('disabled', false).text(originalText);
+                    // Re-enable the button and reset spinner
+                    $button.prop('disabled', false);
+                    $spinner.removeClass('is-active');
                 }
             });
         });

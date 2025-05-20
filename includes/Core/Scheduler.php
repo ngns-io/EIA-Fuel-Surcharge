@@ -144,11 +144,22 @@ class Scheduler {
         // Save the data to the database
         $save_result = $api_handler->save_diesel_price_data($processed_data);
         
-        if ($save_result) {
-            $this->logger->log_update_success();
-            return true;
+        if (isset($save_result['success']) && $save_result['success']) {
+            // Log detailed success information including statistics
+            $stats = isset($save_result['stats']) ? $save_result['stats'] : [];
+            $this->logger->log_update_success($stats);
+            
+            // Now, check if we should update regional data as well
+            if ($this->should_update_regional_data()) {
+                $this->update_regional_data($force_refresh);
+            }
+            
+            return $save_result;
         } else {
             $error_message = 'Failed to save data to database';
+            if (isset($save_result['message'])) {
+                $error_message = $save_result['message'];
+            }
             $this->logger->log_update_error($error_message);
             return [
                 'success' => false,
@@ -156,6 +167,59 @@ class Scheduler {
                 'save_result' => $save_result
             ];
         }
+    }
+
+    /**
+     * Check if regional data should be updated.
+     * 
+     * @since    2.0.0
+     * @return   bool    True if regional data should be updated, false otherwise.
+     */
+    private function should_update_regional_data() {
+        $options = get_option('eia_fuel_surcharge_settings');
+        return isset($options['update_regions']) && $options['update_regions'] === 'true';
+    }
+
+    /**
+     * Update regional data.
+     * 
+     * @since    2.0.0
+     * @param    bool    $force_refresh    Whether to force a refresh from the API.
+     * @return   array   Result of the regional data update.
+     */
+    private function update_regional_data($force_refresh = false) {
+        $api_handler = new EIAHandler();
+        
+        // Log that we're updating regional data
+        $this->logger->log('regional_update_start', __('Starting regional data update', 'eia-fuel-surcharge'));
+        
+        // Get regional diesel prices
+        $regional_data = $api_handler->get_regional_diesel_prices($force_refresh);
+        
+        // Check for errors
+        if (is_wp_error($regional_data)) {
+            $error_message = $regional_data->get_error_message();
+            $this->logger->log('regional_update_error', sprintf(
+                __('Failed to retrieve regional data: %s', 'eia-fuel-surcharge'),
+                $error_message
+            ));
+            return [
+                'success' => false,
+                'message' => $error_message
+            ];
+        }
+        
+        // Process and store the regional data
+        $result = $api_handler->process_and_store_regional_data($regional_data);
+        
+        // Log the result
+        if ($result['success']) {
+            $this->logger->log('regional_update_success', __('Regional data update completed successfully', 'eia-fuel-surcharge'), $result['stats']);
+        } else {
+            $this->logger->log('regional_update_error', __('Regional data update failed', 'eia-fuel-surcharge'), $result);
+        }
+        
+        return $result;
     }
 
     /**
