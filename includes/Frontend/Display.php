@@ -372,4 +372,35 @@ class Display {
             }
         }
     }
+
+    /**
+     * Get the HTML for the EIA source link if enabled.
+     *
+     * @since    2.1.0
+     * @param    bool     $override    Optional. Override the global setting.
+     * @return   string   HTML for the source link or empty string.
+     */
+    public function get_source_link_html($override = null) {
+        if ($override !== null) {
+            $show_source_link = $override;
+        } else {
+            // Get from settings
+            $options = get_option('eia_fuel_surcharge_settings');
+            $show_source_link = isset($options['eia_source_link']) && $options['eia_source_link'] === 'true';
+        }
+        
+        if ($show_source_link) {
+            $html = '<p class="fuel-surcharge-source">';
+            $html .= __('Source: U.S. Energy Information Administration', 'eia-fuel-surcharge');
+            $html .= ' <a href="https://www.eia.gov/petroleum/gasdiesel/" target="_blank">';
+            $html .= __('Gasoline and Diesel Fuel Update', 'eia-fuel-surcharge');
+            $html .= '</a>';
+            $html .= '</p>';
+            
+            return $html;
+        }
+        
+        return '';
+    }
+
 }

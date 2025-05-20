@@ -91,13 +91,14 @@ class Shortcodes {
         // Extract attributes and set defaults
         $atts = shortcode_atts(
             [
-                'format'      => '',
-                'date_format' => '',
-                'decimals'    => null,
-                'class'       => 'fuel-surcharge',
-                'region'      => 'national',
-                'compare'     => 'week',
-                'show_comparison' => 'true'
+                'format'          => '',
+                'date_format'     => '',
+                'decimals'        => null,
+                'class'           => 'fuel-surcharge',
+                'region'          => 'national',
+                'compare'         => 'week',
+                'show_comparison' => 'true',
+                'show_source_link' => '' // Empty string means use global setting
             ],
             $atts,
             'fuel_surcharge'
@@ -145,6 +146,22 @@ class Shortcodes {
             }
         }
         
+        // Add source link if enabled
+        if ($atts['show_source_link'] !== '') {
+            // Use the shortcode attribute to override global setting
+            $show_source_link = $atts['show_source_link'] === 'true';
+            $source_link = $this->display->get_source_link_html($show_source_link);
+            if (!empty($source_link)) {
+                $output .= $source_link;
+            }
+        } else {
+            // Use global setting
+            $source_link = $this->display->get_source_link_html();
+            if (!empty($source_link)) {
+                $output .= $source_link;
+            }
+        }
+        
         // Wrap the output in a div with the specified class
         return '<div class="' . esc_attr($atts['class']) . '">' . $output . '</div>';
     }
@@ -160,15 +177,16 @@ class Shortcodes {
         // Extract attributes and set defaults
         $atts = shortcode_atts(
             [
-                'rows'        => 10,
-                'date_format' => '',
-                'columns'     => 'date,price,rate',
-                'order'       => 'desc',
-                'class'       => 'fuel-surcharge-table',
-                'region'      => 'national',
-                'decimals'    => null,
-                'title'       => '',
-                'show_footer' => 'false'
+                'rows'            => 10,
+                'date_format'     => '',
+                'columns'         => 'date,price,rate',
+                'order'           => 'desc',
+                'class'           => 'fuel-surcharge-table',
+                'region'          => 'national',
+                'decimals'        => null,
+                'title'           => '',
+                'show_footer'     => 'false',
+                'show_source_link' => '' // Empty string means use global setting
             ],
             $atts,
             'fuel_surcharge_table'
@@ -229,15 +247,29 @@ class Shortcodes {
                     $calculator->get_formula_description()
                 ) . 
                 '</p>';
-            
-            if (isset($options['eia_source_link']) && $options['eia_source_link'] === 'true') {
-                $output .= '<p class="fuel-surcharge-source">' . 
-                    __('Source: U.S. Energy Information Administration', 'eia-fuel-surcharge') . 
-                    ' <a href="https://www.eia.gov/petroleum/gasdiesel/" target="_blank">' . 
-                    __('Gasoline and Diesel Fuel Update', 'eia-fuel-surcharge') . 
-                    '</a></p>';
+                
+            // Add source link if enabled (using either shortcode attribute or global setting)
+            if ($atts['show_source_link'] !== '') {
+                // Use the shortcode attribute to override global setting
+                $show_source_link = $atts['show_source_link'] === 'true';
+                if ($show_source_link) {
+                    $output .= $this->display->get_source_link_html(true);
+                }
+            } else {
+                // Use global setting for source link
+                $output .= $this->display->get_source_link_html();
             }
             
+            $output .= '</div>';
+        } else if ($atts['show_source_link'] === 'true' || 
+                 ($atts['show_source_link'] === '' && isset($options['eia_source_link']) && $options['eia_source_link'] === 'true')) {
+            // If footer is not shown but source link is enabled, add it separately
+            $output .= '<div class="fuel-surcharge-table-footer">';
+            if ($atts['show_source_link'] === 'true') {
+                $output .= $this->display->get_source_link_html(true);
+            } else {
+                $output .= $this->display->get_source_link_html();
+            }
             $output .= '</div>';
         }
         

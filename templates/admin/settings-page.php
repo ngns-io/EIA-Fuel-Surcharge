@@ -113,6 +113,11 @@ if (!defined('WPINC')) {
                     <code>[fuel_surcharge region="new_york"]</code>
                     <p class="description"><?php _e('Displays the fuel surcharge rate for a specific region.', 'eia-fuel-surcharge'); ?></p>
                 </div>
+                <div class="shortcode-example">
+                    <h3><?php _e('With Source Attribution', 'eia-fuel-surcharge'); ?></h3>
+                    <code>[fuel_surcharge show_source_link="true"]</code>
+                    <p class="description"><?php _e('Displays the fuel surcharge rate with a link to the EIA data source.', 'eia-fuel-surcharge'); ?></p>
+                </div>
             </div>
             
             <h3><?php _e('Shortcode Parameters', 'eia-fuel-surcharge'); ?></h3>
@@ -170,6 +175,12 @@ if (!defined('WPINC')) {
                             <td><?php _e('Whether to show comparison data', 'eia-fuel-surcharge'); ?></td>
                             <td><?php _e('Setting from plugin options', 'eia-fuel-surcharge'); ?></td>
                             <td><code>show_comparison="false"</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>show_source_link</code></td>
+                            <td><?php _e('Whether to show EIA source link', 'eia-fuel-surcharge'); ?></td>
+                            <td><?php _e('Setting from plugin options', 'eia-fuel-surcharge'); ?></td>
+                            <td><code>show_source_link="true"</code></td>
                         </tr>
                     </tbody>
                 </table>
@@ -238,6 +249,12 @@ if (!defined('WPINC')) {
                             <td><?php _e('Number of decimal places for rates', 'eia-fuel-surcharge'); ?></td>
                             <td><?php _e('Setting from plugin options', 'eia-fuel-surcharge'); ?></td>
                             <td><code>decimals="1"</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>show_source_link</code></td>
+                            <td><?php _e('Whether to show EIA source link', 'eia-fuel-surcharge'); ?></td>
+                            <td><?php _e('Setting from plugin options', 'eia-fuel-surcharge'); ?></td>
+                            <td><code>show_source_link="true"</code></td>
                         </tr>
                     </tbody>
                 </table>

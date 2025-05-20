@@ -43,6 +43,29 @@
     background-color: #f5f5f5;
 }
 
+/* Source link styling */
+.fuel-surcharge-source {
+    font-size: 13px;
+    font-style: italic;
+    color: #666;
+    margin-top: 8px;
+    margin-bottom: 0;
+}
+
+.fuel-surcharge-source a {
+    color: #0073aa;
+    text-decoration: none;
+}
+
+.fuel-surcharge-source a:hover {
+    text-decoration: underline;
+}
+
+/* When source link is used with table */
+.fuel-surcharge-table-footer .fuel-surcharge-source {
+    margin-top: 5px;
+}
+
 /* Error messages */
 .fuel-surcharge-error {
     color: #d63638;
