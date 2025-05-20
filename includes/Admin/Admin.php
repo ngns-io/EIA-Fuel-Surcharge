@@ -51,7 +51,10 @@ class Admin {
         add_action('admin_post_eia_fuel_surcharge_clear_data', [$this, 'handle_clear_data']);
         add_action('admin_post_eia_fuel_surcharge_clear_logs', [$this, 'handle_clear_logs']);
         add_action('admin_post_eia_fuel_surcharge_export_data', [$this, 'handle_export_data']);
-    }
+        
+        // Add dashboard widget
+        add_action('wp_dashboard_setup', [$this, 'register_dashboard_widgets']);
+}
 
     /**
      * Register the stylesheets for the admin area.
@@ -102,20 +105,30 @@ class Admin {
      * @since    1.0.0
      */
     public function add_plugin_admin_menu() {
-        // Main menu item that points to the settings page
+        // Main menu item that points to a dashboard page
         add_menu_page(
             __('EIA Fuel Surcharge', 'eia-fuel-surcharge'),
             __('Fuel Surcharge', 'eia-fuel-surcharge'),
             'manage_options',
-            $this->plugin_name . '-settings', // Change this to point to settings
-            [$this, 'display_plugin_settings_page'], // Use the settings page callback
+            $this->plugin_name, // Change this to point to the dashboard
+            [$this, 'display_plugin_dashboard_page'], // Use the dashboard page callback
             'dashicons-chart-line',
             100
         );
         
-        // Add settings as the first submenu to override the duplicate
+        // Add dashboard as the first submenu to override the duplicate
         add_submenu_page(
-            $this->plugin_name . '-settings',
+            $this->plugin_name,
+            __('Dashboard', 'eia-fuel-surcharge'),
+            __('Dashboard', 'eia-fuel-surcharge'),
+            'manage_options',
+            $this->plugin_name,
+            [$this, 'display_plugin_dashboard_page']
+        );
+        
+        // Add settings page
+        add_submenu_page(
+            $this->plugin_name,
             __('Settings', 'eia-fuel-surcharge'),
             __('Settings', 'eia-fuel-surcharge'),
             'manage_options',
@@ -125,7 +138,7 @@ class Admin {
         
         // Data submenu
         add_submenu_page(
-            $this->plugin_name . '-settings', // Change parent menu
+            $this->plugin_name,
             __('Data & History', 'eia-fuel-surcharge'),
             __('Data & History', 'eia-fuel-surcharge'),
             'manage_options',
@@ -135,7 +148,7 @@ class Admin {
         
         // Logs submenu
         add_submenu_page(
-            $this->plugin_name . '-settings', // Change parent menu
+            $this->plugin_name,
             __('Logs', 'eia-fuel-surcharge'),
             __('Logs', 'eia-fuel-surcharge'),
             'manage_options',
@@ -150,10 +163,48 @@ class Admin {
      * @since    1.0.0
      */
     public function add_action_links($links) {
-        $settings_link = [
+        $action_links = [
+            '<a href="' . admin_url('admin.php?page=' . $this->plugin_name) . '">' . __('Dashboard', 'eia-fuel-surcharge') . '</a>',
             '<a href="' . admin_url('admin.php?page=' . $this->plugin_name . '-settings') . '">' . __('Settings', 'eia-fuel-surcharge') . '</a>',
         ];
-        return array_merge($settings_link, $links);
+        return array_merge($action_links, $links);
+    }
+
+    /**
+     * Render the dashboard page.
+     *
+     * @since    1.0.0
+     */
+    public function display_plugin_dashboard_page() {
+        // Get the API handler, scheduler, and calculator
+        $api_handler = new \EIAFuelSurcharge\API\EIAHandler();
+        $scheduler = new \EIAFuelSurcharge\Core\Scheduler();
+        $calculator = new \EIAFuelSurcharge\Utilities\Calculator();
+        $logger = new \EIAFuelSurcharge\Utilities\Logger();
+        
+        // Get API status
+        $api_status = $api_handler->get_api_status();
+        
+        // Get next scheduled update
+        $next_update = $scheduler->get_next_scheduled_update();
+        
+        // Get latest data
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'fuel_surcharge_data';
+        $latest_data = $wpdb->get_row("SELECT * FROM $table_name ORDER BY price_date DESC LIMIT 1", ARRAY_A);
+        
+        // Get stats
+        $total_records = $wpdb->get_var("SELECT COUNT(*) FROM $table_name");
+        
+        // Get last log entries
+        $log_table = $wpdb->prefix . 'fuel_surcharge_logs';
+        $recent_logs = $wpdb->get_results(
+            "SELECT * FROM $log_table ORDER BY created_at DESC LIMIT 5",
+            ARRAY_A
+        );
+        
+        // Render the dashboard
+        include_once EIA_FUEL_SURCHARGE_PLUGIN_DIR . 'templates/admin/dashboard-page.php';
     }
 
     /**
@@ -201,6 +252,48 @@ class Admin {
         // Create a settings object to handle all settings rendering and validation
         $settings = new Settings($this->plugin_name, $this->version);
         $settings->register();
+    }
+
+    /**
+     * Register dashboard widgets.
+     *
+     * @since    1.0.0
+     */
+    public function register_dashboard_widgets() {
+        // Only add dashboard widget if user has appropriate capabilities
+        if (current_user_can('manage_options')) {
+            wp_add_dashboard_widget(
+                'eia_fuel_surcharge_dashboard_widget',
+                __('Fuel Surcharge Overview', 'eia-fuel-surcharge'),
+                [$this, 'display_dashboard_widget']
+            );
+        }
+    }
+
+    /**
+     * Display the dashboard widget content.
+     *
+     * @since    1.0.0
+     */
+    public function display_dashboard_widget() {
+        // Get the API handler, scheduler, and calculator
+        $api_handler = new \EIAFuelSurcharge\API\EIAHandler();
+        $scheduler = new \EIAFuelSurcharge\Core\Scheduler();
+        $calculator = new \EIAFuelSurcharge\Utilities\Calculator();
+        
+        // Get API status
+        $api_status = $api_handler->get_api_status();
+        
+        // Get next scheduled update
+        $next_update = $scheduler->get_next_scheduled_update();
+        
+        // Get latest data
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'fuel_surcharge_data';
+        $latest_data = $wpdb->get_row("SELECT * FROM $table_name ORDER BY price_date DESC LIMIT 1", ARRAY_A);
+        
+        // Include the dashboard widget template
+        include_once EIA_FUEL_SURCHARGE_PLUGIN_DIR . 'templates/admin/dashboard-widget.php';
     }
 
     /**

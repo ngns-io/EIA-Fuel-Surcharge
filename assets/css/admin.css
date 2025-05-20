@@ -95,7 +95,7 @@
     color: #00a32a;
 }
 
-/* Dashboard Widget */
+/* Dashboard Widget Styling */
 .eia-fuel-surcharge-dashboard-widget {
     padding: 12px;
 }
@@ -108,6 +108,66 @@
     font-size: 16px;
     font-weight: 600;
     margin-bottom: 16px;
+}
+
+.eia-fuel-surcharge-dashboard-widget .date-info {
+    display: block;
+    font-size: 12px;
+    color: #777;
+    margin-top: 2px;
+}
+
+.eia-fuel-surcharge-dashboard-widget .eia-fuel-surcharge-actions {
+    margin-top: 15px;
+}
+
+.eia-fuel-surcharge-dashboard-widget .shortcode-info {
+    margin-top: 12px; 
+    padding-top: 8px; 
+    border-top: 1px solid #eee;
+}
+
+.eia-fuel-surcharge-dashboard-widget code {
+    display: block; 
+    margin: 5px 0; 
+    padding: 4px; 
+    background: #f8f8f8;
+}
+
+/* Dashboard Page Specific Styling */
+.eia-fuel-surcharge-overview {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 15px -10px;
+}
+
+.eia-fuel-surcharge-stat {
+    flex: 1;
+    min-width: 200px;
+    padding: 15px;
+    margin: 0 10px 20px;
+    background: #f9f9f9;
+    border: 1px solid #e5e5e5;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.eia-fuel-surcharge-stat h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 14px;
+    color: #555;
+}
+
+.eia-fuel-surcharge-value {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.eia-fuel-surcharge-subtext {
+    font-size: 12px;
+    color: #777;
 }
 
 /* API Testing styles */
