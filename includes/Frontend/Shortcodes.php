@@ -98,7 +98,8 @@ class Shortcodes {
                 'region'          => 'national',
                 'compare'         => 'week',
                 'show_comparison' => 'true',
-                'show_source_link' => '' // Empty string means use global setting
+                'show_source_link' => '', // Empty string means use global setting
+                'display'         => 'text' // New parameter: 'text' or 'card'
             ],
             $atts,
             'fuel_surcharge'
@@ -126,14 +127,27 @@ class Shortcodes {
                 '</p>';
         }
         
-        // Format the output
-        $output = $this->display->format_surcharge_rate(
-            $data['surcharge_rate'],
-            $atts['decimals'],
-            $atts['format'],
-            $atts['date_format'],
-            $data['price_date']
-        );
+        // Check display type
+        if ($atts['display'] === 'card') {
+            // Use card display
+            return $this->display->format_surcharge_card(
+                $data,
+                $atts['decimals'],
+                $atts['date_format'],
+                $atts['class'],
+                $atts['show_comparison'] === 'true' ? $atts['compare'] : false,
+                $atts['show_source_link']
+            );
+        } else {
+            // Format the output
+            $output = $this->display->format_surcharge_rate(
+                $data['surcharge_rate'],
+                $atts['decimals'],
+                $atts['format'],
+                $atts['date_format'],
+                $data['price_date']
+            );
+        }
         
         // Add comparison if enabled
         if ($atts['show_comparison'] === 'true' && !empty($atts['compare'])) {

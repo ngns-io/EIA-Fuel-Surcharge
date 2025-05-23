@@ -47,6 +47,94 @@ class Display {
     }
 
     /**
+     * Format surcharge data as a KPI card.
+     *
+     * @since    2.0.0
+     * @param    array     $data             The fuel surcharge data.
+     * @param    int       $decimals         Number of decimal places.
+     * @param    string    $date_format      Date format for display.
+     * @param    string    $class            CSS class for the card.
+     * @param    string    $compare_period   Comparison period (false to disable).
+     * @param    string    $show_source      Whether to show source link.
+     * @return   string    Formatted HTML for the KPI card.
+     */
+    public function format_surcharge_card($data, $decimals = null, $date_format = null, $class = 'fuel-surcharge', $compare_period = false, $show_source = '') {
+        // Get plugin settings
+        $options = get_option('eia_fuel_surcharge_settings');
+        
+        // Use settings if parameters are not provided
+        $decimals = ($decimals !== null) ? $decimals : (isset($options['decimal_places']) ? intval($options['decimal_places']) : 2);
+        $date_format = $date_format ?: (isset($options['date_format']) ? $options['date_format'] : 'm/d/Y');
+        
+        // Start building the card HTML
+        $html = '<div class="' . esc_attr($class) . ' fuel-surcharge-card">';
+        
+        // Card header
+        $html .= '<div class="fuel-surcharge-card-header">';
+        $html .= '<div class="fuel-surcharge-card-title">' . __('Current Fuel Surcharge', 'eia-fuel-surcharge') . '</div>';
+        $html .= '</div>';
+        
+        // Card body
+        $html .= '<div class="fuel-surcharge-card-body">';
+        
+        // Main metric
+        $html .= '<div class="fuel-surcharge-metric">';
+        $html .= '<div class="fuel-surcharge-value">' . number_format($data['surcharge_rate'], $decimals) . '%</div>';
+        $html .= '<div class="fuel-surcharge-date">' . sprintf(__('as of %s', 'eia-fuel-surcharge'), date_i18n($date_format, strtotime($data['price_date']))) . '</div>';
+        $html .= '</div>';
+        
+        // Additional info
+        $html .= '<div class="fuel-surcharge-details">';
+        $html .= '<div class="fuel-surcharge-detail-row">';
+        $html .= '<span class="fuel-surcharge-label">' . __('Diesel Price:', 'eia-fuel-surcharge') . '</span>';
+        $html .= '<span class="fuel-surcharge-price">$' . number_format($data['diesel_price'], 3) . '</span>';
+        $html .= '</div>';
+        
+        $html .= '<div class="fuel-surcharge-detail-row">';
+        $html .= '<span class="fuel-surcharge-label">' . __('Region:', 'eia-fuel-surcharge') . '</span>';
+        $html .= '<span class="fuel-surcharge-region">' . ucfirst(str_replace('_', ' ', $data['region'])) . '</span>';
+        $html .= '</div>';
+        
+        // Add comparison if enabled
+        if ($compare_period) {
+            $comparison = $this->get_comparison_data($data, $compare_period);
+            if ($comparison) {
+                $comparison_text = $this->format_comparison($comparison, $decimals);
+                if (!empty($comparison_text)) {
+                    $html .= '<div class="fuel-surcharge-comparison">';
+                    $html .= $comparison_text;
+                    $html .= '</div>';
+                }
+            }
+        }
+        
+        $html .= '</div>'; // .fuel-surcharge-details
+        $html .= '</div>'; // .fuel-surcharge-card-body
+        
+        // Card footer with source link if enabled
+        if ($show_source !== '') {
+            $show_source_link = $show_source === 'true';
+        } else {
+            $show_source_link = isset($options['eia_source_link']) && $options['eia_source_link'] === 'true';
+        }
+        
+        if ($show_source_link) {
+            $html .= '<div class="fuel-surcharge-card-footer">';
+            $html .= '<p class="fuel-surcharge-source">';
+            $html .= __('Source: U.S. Energy Information Administration', 'eia-fuel-surcharge');
+            $html .= ' <a href="https://www.eia.gov/petroleum/gasdiesel/" target="_blank">';
+            $html .= __('Gasoline and Diesel Fuel Update', 'eia-fuel-surcharge');
+            $html .= '</a>';
+            $html .= '</p>';
+            $html .= '</div>';
+        }
+        
+        $html .= '</div>'; // .fuel-surcharge-card
+        
+        return $html;
+    }
+
+    /**
      * Get the latest fuel surcharge data.
      *
      * @since    1.0.0

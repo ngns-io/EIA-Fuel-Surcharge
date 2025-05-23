@@ -113,10 +113,23 @@ if (!defined('WPINC')) {
                     <code>[fuel_surcharge region="new_york"]</code>
                     <p class="description"><?php _e('Displays the fuel surcharge rate for a specific region.', 'eia-fuel-surcharge'); ?></p>
                 </div>
+
                 <div class="shortcode-example">
                     <h3><?php _e('With Source Attribution', 'eia-fuel-surcharge'); ?></h3>
                     <code>[fuel_surcharge show_source_link="true"]</code>
                     <p class="description"><?php _e('Displays the fuel surcharge rate with a link to the EIA data source.', 'eia-fuel-surcharge'); ?></p>
+                </div>
+
+                <div class="shortcode-example">
+                    <h3><?php _e('KPI Card Display', 'eia-fuel-surcharge'); ?></h3>
+                    <code>[fuel_surcharge display="card"]</code>
+                    <p class="description"><?php _e('Displays the fuel surcharge as a styled KPI card with metric visualization.', 'eia-fuel-surcharge'); ?></p>
+                </div>
+
+                <div class="shortcode-example">
+                    <h3><?php _e('Customized KPI Card', 'eia-fuel-surcharge'); ?></h3>
+                    <code>[fuel_surcharge display="card" class="fuel-surcharge large" show_comparison="true" compare="month"]</code>
+                    <p class="description"><?php _e('Displays a large KPI card with month-over-month comparison.', 'eia-fuel-surcharge'); ?></p>
                 </div>
             </div>
             
@@ -181,6 +194,12 @@ if (!defined('WPINC')) {
                             <td><?php _e('Whether to show EIA source link', 'eia-fuel-surcharge'); ?></td>
                             <td><?php _e('Setting from plugin options', 'eia-fuel-surcharge'); ?></td>
                             <td><code>show_source_link="true"</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>display</code></td>
+                            <td><?php _e('Display style (text or card)', 'eia-fuel-surcharge'); ?></td>
+                            <td><code>text</code></td>
+                            <td><code>display="card"</code></td>
                         </tr>
                     </tbody>
                 </table>
