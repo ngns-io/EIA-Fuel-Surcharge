@@ -54,7 +54,15 @@ class Admin {
         
         // Add dashboard widget
         add_action('wp_dashboard_setup', [$this, 'register_dashboard_widgets']);
-}
+
+        // Hook into settings updates to trigger schedule updates
+        add_action('update_option_eia_fuel_surcharge_settings', [$this, 'handle_settings_update'], 10, 3);
+        
+        // Add admin notices for schedule updates
+        add_action('admin_notices', [$this, 'show_schedule_update_notices']);
+
+        add_action('wp_ajax_eia_fuel_surcharge_force_reschedule', [$this, 'ajax_force_reschedule']);
+    }
 
     /**
      * Register the stylesheets for the admin area.
@@ -618,5 +626,124 @@ class Admin {
         // Close the file pointer
         fclose($output);
         exit;
+    }
+
+    /**
+     * Handle settings update and trigger schedule update if needed.
+     *
+     * @since    2.0.0
+     * @param    mixed     $old_value    The old option value.
+     * @param    mixed     $value        The new option value.
+     * @param    string    $option       Option name.
+     */
+    public function handle_settings_update($old_value, $value, $option) {
+        // Only proceed if this is our settings option
+        if ($option !== 'eia_fuel_surcharge_settings') {
+            return;
+        }
+        
+        // Check if schedule-related settings have changed
+        $schedule_fields = ['update_frequency', 'update_day', 'update_day_of_month', 'custom_interval', 'update_time'];
+        $schedule_changed = false;
+        
+        // If old_value is empty (first time save), always update schedule
+        if (empty($old_value)) {
+            $schedule_changed = true;
+        } else {
+            // Compare schedule-related fields
+            foreach ($schedule_fields as $field) {
+                $old_val = isset($old_value[$field]) ? $old_value[$field] : '';
+                $new_val = isset($value[$field]) ? $value[$field] : '';
+                
+                if ($old_val !== $new_val) {
+                    $schedule_changed = true;
+                    break;
+                }
+            }
+        }
+        
+        if ($schedule_changed) {
+            // Update the schedule
+            $scheduler = new Scheduler();
+            $scheduler->schedule_update();
+            
+            // Set a transient to show admin notice
+            set_transient('eia_fuel_surcharge_schedule_updated', true, 30);
+        }
+    }
+
+    /**
+     * Show admin notices for schedule updates.
+     *
+     * @since    2.0.0
+     */
+    public function show_schedule_update_notices() {
+        // Check if we should show the schedule update notice
+        if (get_transient('eia_fuel_surcharge_schedule_updated')) {
+            delete_transient('eia_fuel_surcharge_schedule_updated');
+            
+            // Get the next scheduled time
+            $scheduler = new Scheduler();
+            $next_update = $scheduler->get_next_scheduled_update();
+            
+            $message = __('Schedule updated successfully!', 'eia-fuel-surcharge');
+            
+            if ($next_update) {
+                $message .= ' ' . sprintf(
+                    __('Next update scheduled for: %s', 'eia-fuel-surcharge'),
+                    date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $next_update)
+                );
+            }
+            
+            echo '<div class="notice notice-success is-dismissible">';
+            echo '<p>' . esc_html($message) . '</p>';
+            echo '</div>';
+        }
+    }
+
+    /**
+     * Handle force reschedule request via AJAX.
+     *
+     * @since    2.0.0
+     */
+    public function ajax_force_reschedule() {
+        // Check nonce
+        if (!check_ajax_referer('eia_fuel_surcharge_force_reschedule', 'nonce', false)) {
+            wp_send_json_error([
+                'message' => __('Security check failed', 'eia-fuel-surcharge')
+            ]);
+        }
+        
+        // Check for user capabilities
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error([
+                'message' => __('You do not have sufficient permissions to perform this action', 'eia-fuel-surcharge')
+            ]);
+        }
+        
+        // Force reschedule
+        $scheduler = new Scheduler();
+        $result = $scheduler->force_reschedule();
+        
+        if ($result) {
+            $next_update = $scheduler->get_next_scheduled_update();
+            $message = __('Schedule updated successfully!', 'eia-fuel-surcharge');
+            
+            if ($next_update) {
+                $message .= ' ' . sprintf(
+                    __('Next update scheduled for: %s', 'eia-fuel-surcharge'),
+                    date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $next_update)
+                );
+            }
+            
+            wp_send_json_success([
+                'message' => $message,
+                'next_update' => $next_update
+            ]);
+        } else {
+            wp_send_json_error([
+                'message' => __('Failed to reschedule. Please check the logs for more information.', 'eia-fuel-surcharge')
+            ]);
+        }
     }
 }

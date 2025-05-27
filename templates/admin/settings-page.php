@@ -72,6 +72,93 @@ if (!defined('WPINC')) {
                 </tr>
             </table>
 
+            <!-- Current Schedule Information -->
+            <h3><?php _e('Current Schedule Information', 'eia-fuel-surcharge'); ?></h3>
+            <table class="form-table">
+                <tr>
+                    <th scope="row"><?php _e('Schedule Status', 'eia-fuel-surcharge'); ?></th>
+                    <td>
+                        <?php
+                        $scheduler = new EIAFuelSurcharge\Core\Scheduler();
+                        $next_update = $scheduler->get_next_scheduled_update();
+                        $debug_info = $scheduler->get_schedule_debug_info();
+                        
+                        if ($next_update) {
+                            echo '<span style="color: green;"><strong>' . __('Scheduled', 'eia-fuel-surcharge') . '</strong></span><br>';
+                            echo sprintf(
+                                __('Next update: %s (%s from now)', 'eia-fuel-surcharge'),
+                                date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $next_update),
+                                human_time_diff(time(), $next_update)
+                            );
+                        } else {
+                            echo '<span style="color: red;"><strong>' . __('Not Scheduled', 'eia-fuel-surcharge') . '</strong></span><br>';
+                            echo __('No update is currently scheduled.', 'eia-fuel-surcharge');
+                        }
+                        ?>
+                        
+                        <div style="margin-top: 10px;">
+                            <button type="button" id="force-reschedule-button" class="button button-secondary">
+                                <?php _e('Force Reschedule', 'eia-fuel-surcharge'); ?>
+                            </button>
+                            <button type="button" id="show-schedule-debug" class="button button-secondary">
+                                <?php _e('Show Debug Info', 'eia-fuel-surcharge'); ?>
+                            </button>
+                        </div>
+                        
+                        <div id="schedule-debug-info" style="display: none; margin-top: 15px; padding: 10px; background: #f5f5f5; border: 1px solid #ddd;">
+                            <h4><?php _e('Schedule Debug Information', 'eia-fuel-surcharge'); ?></h4>
+                            <pre style="white-space: pre-wrap; font-size: 12px;"><?php echo esc_html(print_r($debug_info, true)); ?></pre>
+                        </div>
+                        
+                        <div id="reschedule-results" style="margin-top: 10px;"></div>
+                    </td>
+                </tr>
+            </table>
+
+            <script type="text/javascript">
+            jQuery(document).ready(function($) {
+                // Show/hide debug info
+                $('#show-schedule-debug').on('click', function() {
+                    $('#schedule-debug-info').slideToggle();
+                });
+                
+                // Force reschedule
+                $('#force-reschedule-button').on('click', function() {
+                    var $button = $(this);
+                    var $results = $('#reschedule-results');
+                    var originalText = $button.text();
+                    
+                    $button.prop('disabled', true).text('<?php _e('Rescheduling...', 'eia-fuel-surcharge'); ?>');
+                    $results.empty();
+                    
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'eia_fuel_surcharge_force_reschedule',
+                            nonce: '<?php echo wp_create_nonce('eia_fuel_surcharge_force_reschedule'); ?>'
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                $results.html('<div class="notice notice-success inline"><p>' + response.data.message + '</p></div>');
+                                // Reload the page after 2 seconds to show updated schedule
+                                setTimeout(function() {
+                                    window.location.reload();
+                                }, 2000);
+                            } else {
+                                $results.html('<div class="notice notice-error inline"><p>' + (response.data.message || 'Reschedule failed') + '</p></div>');
+                            }
+                        },
+                        error: function() {
+                            $results.html('<div class="notice notice-error inline"><p><?php _e('Error processing request', 'eia-fuel-surcharge'); ?></p></div>');
+                        },
+                        complete: function() {
+                            $button.prop('disabled', false).text(originalText);
+                        }
+                    });
+                });
+            });
+            </script>
         </div>
 
         <!-- Display Settings Tab -->

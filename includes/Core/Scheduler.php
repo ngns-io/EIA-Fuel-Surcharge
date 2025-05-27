@@ -68,7 +68,7 @@ class Scheduler {
      * @since    1.0.0
      */
     public function schedule_update() {
-        // Clear any existing schedule
+        // Clear any existing schedule first
         $this->clear_scheduled_update();
         
         $options = get_option('eia_fuel_surcharge_settings');
@@ -76,6 +76,14 @@ class Scheduler {
         $frequency = isset($options['update_frequency']) ? $options['update_frequency'] : 'weekly';
         $day = isset($options['update_day']) ? $options['update_day'] : 'tuesday';
         $time = isset($options['update_time']) ? $options['update_time'] : '12:00';
+        
+        // Log the settings being used
+        $this->logger->log('schedule_update', sprintf(
+            __('Scheduling update with frequency: %s, day: %s, time: %s', 'eia-fuel-surcharge'),
+            $frequency,
+            $day,
+            $time
+        ));
         
         // Calculate the next run time based on frequency and day
         $next_run = $this->calculate_next_run_time($frequency, $day, $time, $options);
@@ -85,10 +93,30 @@ class Scheduler {
         
         // Schedule the event
         if ($recurrence && $next_run) {
-            wp_schedule_event($next_run, $recurrence, 'eia_fuel_surcharge_update_event');
+            $scheduled = wp_schedule_event($next_run, $recurrence, 'eia_fuel_surcharge_update_event');
             
-            // Log the scheduled event
-            $this->logger->log_scheduled_event($next_run, $recurrence);
+            if ($scheduled !== false) {
+                // Log the scheduled event with more detail
+                $this->logger->log('schedule_success', sprintf(
+                    __('Successfully scheduled update for %s (frequency: %s)', 'eia-fuel-surcharge'),
+                    date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $next_run),
+                    $recurrence
+                ));
+            } else {
+                // Log scheduling failure
+                $this->logger->log('schedule_error', sprintf(
+                    __('Failed to schedule update event. Next run: %s, Recurrence: %s', 'eia-fuel-surcharge'),
+                    date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $next_run),
+                    $recurrence
+                ));
+            }
+        } else {
+            // Log invalid parameters
+            $this->logger->log('schedule_error', sprintf(
+                __('Invalid scheduling parameters. Recurrence: %s, Next run: %s', 'eia-fuel-surcharge'),
+                $recurrence ?: 'null',
+                $next_run ? date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $next_run) : 'null'
+            ));
         }
     }
 
@@ -98,6 +126,17 @@ class Scheduler {
      * @since    1.0.0
      */
     public function clear_scheduled_update() {
+        // Check if there's a scheduled event first
+        $next_scheduled = wp_next_scheduled('eia_fuel_surcharge_update_event');
+        
+        if ($next_scheduled) {
+            $this->logger->log('schedule_clear', sprintf(
+                __('Clearing existing scheduled update (was scheduled for %s)', 'eia-fuel-surcharge'),
+                date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $next_scheduled)
+            ));
+        }
+        
+        // Clear the scheduled event
         wp_clear_scheduled_hook('eia_fuel_surcharge_update_event');
     }
 
@@ -334,5 +373,84 @@ class Scheduler {
      */
     public function get_next_scheduled_update() {
         return wp_next_scheduled('eia_fuel_surcharge_update_event');
+    }
+
+    /**
+     * Get detailed schedule information for debugging.
+     *
+     * @since    2.0.0
+     * @return   array    Schedule debugging information.
+     */
+    public function get_schedule_debug_info() {
+        $options = get_option('eia_fuel_surcharge_settings', []);
+        $next_scheduled = wp_next_scheduled('eia_fuel_surcharge_update_event');
+        
+        $debug_info = [
+            'settings' => [
+                'update_frequency' => isset($options['update_frequency']) ? $options['update_frequency'] : 'not set',
+                'update_day' => isset($options['update_day']) ? $options['update_day'] : 'not set',
+                'update_day_of_month' => isset($options['update_day_of_month']) ? $options['update_day_of_month'] : 'not set',
+                'custom_interval' => isset($options['custom_interval']) ? $options['custom_interval'] : 'not set',
+                'update_time' => isset($options['update_time']) ? $options['update_time'] : 'not set',
+            ],
+            'current_schedule' => [
+                'is_scheduled' => $next_scheduled !== false,
+                'next_run' => $next_scheduled ? date_i18n('Y-m-d H:i:s', $next_scheduled) : 'not scheduled',
+                'next_run_timestamp' => $next_scheduled ?: 0,
+                'time_until_next' => $next_scheduled ? human_time_diff(time(), $next_scheduled) : 'N/A',
+            ],
+            'wordpress_info' => [
+                'current_time' => current_time('Y-m-d H:i:s'),
+                'current_timestamp' => current_time('timestamp'),
+                'timezone' => wp_timezone_string(),
+                'available_schedules' => wp_get_schedules(),
+            ]
+        ];
+        
+        return $debug_info;
+    }
+
+    /**
+     * Log detailed schedule information.
+     *
+     * @since    2.0.0
+     */
+    public function log_schedule_debug_info() {
+        $debug_info = $this->get_schedule_debug_info();
+        $this->logger->log('schedule_debug', __('Schedule debug information', 'eia-fuel-surcharge'), $debug_info);
+    }
+
+    /**
+     * Force reschedule - clears and recreates the schedule.
+     *
+     * @since    2.0.0
+     * @return   bool    True if rescheduled successfully, false otherwise.
+     */
+    public function force_reschedule() {
+        $this->logger->log('schedule_force_reschedule', __('Forcing schedule reschedule', 'eia-fuel-surcharge'));
+        
+        // Log debug info before
+        $this->log_schedule_debug_info();
+        
+        // Clear and reschedule
+        $this->clear_scheduled_update();
+        $this->schedule_update();
+        
+        // Log debug info after
+        $this->log_schedule_debug_info();
+        
+        // Check if scheduling was successful
+        $next_scheduled = wp_next_scheduled('eia_fuel_surcharge_update_event');
+        
+        if ($next_scheduled) {
+            $this->logger->log('schedule_force_reschedule_success', sprintf(
+                __('Force reschedule successful. Next run: %s', 'eia-fuel-surcharge'),
+                date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $next_scheduled)
+            ));
+            return true;
+        } else {
+            $this->logger->log('schedule_force_reschedule_error', __('Force reschedule failed - no event scheduled', 'eia-fuel-surcharge'));
+            return false;
+        }
     }
 }

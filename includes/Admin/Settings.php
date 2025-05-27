@@ -279,15 +279,15 @@ class Settings {
     }
     
     /**
-     * Validate settings.
+     * Validate settings and update schedule when needed.
      *
      * @since    1.0.0
      * @param    array    $input    The settings input.
      * @return   array    The validated settings.
      */
     public function validate_settings($input) {
-        // For debugging
-        error_log('Validate settings called: ' . print_r($input, true));
+        // For debugging - you can remove this later
+        error_log('Validate settings called with input: ' . print_r($input, true));
         
         $validated = [];
         
@@ -319,18 +319,43 @@ class Settings {
         $validated['show_comparison'] = isset($input['show_comparison']) ? 'true' : 'false';
         $validated['default_comparison'] = isset($input['default_comparison']) ? sanitize_text_field($input['default_comparison']) : 'week';
         
-        // Get the existing settings
+        // Get the existing settings for comparison
         $existing_settings = get_option('eia_fuel_surcharge_settings', []);
         
-        // If schedule settings have changed, update the scheduled event
-        if (empty($existing_settings) || 
-            $existing_settings['update_frequency'] !== $validated['update_frequency'] || 
-            $existing_settings['update_day'] !== $validated['update_day'] ||
-            $existing_settings['update_time'] !== $validated['update_time']) {
+        // Check if schedule-related settings have changed
+        $schedule_changed = false;
+        
+        // Compare each schedule-related setting
+        $schedule_fields = ['update_frequency', 'update_day', 'update_day_of_month', 'custom_interval', 'update_time'];
+        
+        foreach ($schedule_fields as $field) {
+            $old_value = isset($existing_settings[$field]) ? $existing_settings[$field] : '';
+            $new_value = isset($validated[$field]) ? $validated[$field] : '';
             
-            // Update the schedule
-            $scheduler = new Scheduler();
-            $scheduler->schedule_update();
+            if ($old_value !== $new_value) {
+                $schedule_changed = true;
+                error_log("Schedule field '{$field}' changed from '{$old_value}' to '{$new_value}'");
+                break;
+            }
+        }
+        
+        // If this is the first time settings are saved (no existing settings), also update schedule
+        if (empty($existing_settings)) {
+            $schedule_changed = true;
+            error_log('First time settings save - updating schedule');
+        }
+        
+        // Update the schedule if needed
+        if ($schedule_changed) {
+            error_log('Schedule settings changed - updating scheduled events');
+            
+            // Use a WordPress action to update the schedule after the settings are saved
+            // This ensures the new settings are available when the schedule is updated
+            add_action('update_option_eia_fuel_surcharge_settings', function($old_value, $value, $option) {
+                error_log('Settings updated - triggering schedule update');
+                $scheduler = new Scheduler();
+                $scheduler->schedule_update();
+            }, 10, 3);
         }
         
         return $validated;
